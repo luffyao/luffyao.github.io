@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://luffyao.github.io/sitemap.xml

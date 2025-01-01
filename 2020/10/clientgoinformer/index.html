@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="client-go 之 Informer 篇" />
+    <meta property="og:title" content="client-go 之 Informer 篇" />
+    <meta property="twitter:title" content="client-go 之 Informer 篇" />
+    
+
+    
+    <meta name="description" content="client-go 中提供的不同种 Informer 的介绍及源码角度对 Informer 机制的分析。">
+    <meta property="og:description" content="client-go 中提供的不同种 Informer 的介绍及源码角度对 Informer 机制的分析。" />
+    <meta property="twitter:description" content="client-go 中提供的不同种 Informer 的介绍及源码角度对 Informer 机制的分析。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="Kubernetes,client-go,informer">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>client-go 之 Informer 篇 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2020/10/clientgoinformer/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/kubernetes" title="Kubernetes">
+                            Kubernetes
+                        </a>
+                        
+                        <a class="tag" href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                    </div>
+                    <h1>client-go 之 Informer 篇</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Saturday, October 17, 2020
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="client-go-源码学习系列">client-go 源码学习系列：</h2>
+<ul>
+<li><a href="https://luffyao.github.io/2020/08/clientgooverall/">client-go 之概述篇</a></li>
+<li>client-go 之 Informer 篇</li>
+<li><a href="https://luffyao.github.io/2020/09/clientgoworkqueue/">client-go 之 WorkQueue 篇</a></li>
+</ul>
+<h2 id="前言">前言</h2>
+<p>在上篇文章中主要讲解了 client-go 中主要源码目录结构，client-go 提供的各种客户端接口，并且简单介绍了 client-go 中 informer 机制中各组件的功能，以及 client-go 中提供的 WorkQueue 的几种接口。而这篇文章，将从源码的角度和大家详细的分析下 Informer 中主要组件的实现。</p>
+<h2 id="informer-介绍">Informer 介绍</h2>
+<p>在 client-go 中提供了各种访问 API 资源的客户端接口，以便使用者可以方便的操作存储在 ETCD 中的各种资源对象。为了能够快速的获取到对象的变化，K8S 提供了 Watch 的 API 去监听资源在 ETCD 中的变化事件。而这里的 Watch 操作其实是客户端通过发送一个 HTTP 请求与服务端建立一个长连接，并通过 <em>Chunked transfer coding</em> （即分块传输编码）的传输机制实现的。</p>
+<p>而一般我们很少直接使用 Watch API 去监听资源的变化事件，因为直接使用这个 API，对于调用者是用户不友好的，为什么这么说，因为每个 Watch 都要维护一个 HTTP 长连接，因此，对于调用者来说需要处理很多异常问题，并且我们知道 Watch 只是监听 API 资源的变化事件，那其中包括添加，修改，删除事件，因此调用者还要判断事件类型，并做不同的处理；还有最重要的一点是，调用者还要自己保证如何不丢失事件。所以，对于调用者来说，如果都要自己实现，那简直是太灾难了。因此 K8S 实现了一套 Watch 操作即这里的 Informer 机制，从而使得调用者实现资源变化的监听更为简单。</p>
+<p>首先我们来简单描述下 Informer 的实现机制。首先 Informer 中的 Reflector 组件会调用 List API 去获取所有指定资源对象信息，并存储在本地的 Store 中；然后 Reflector 组件调用 Watch API 去监听指定资源的变化事件（这里的 List 和 Watch 操作，在 K8S 中大家都叫它 ListWatch 操作）；而当 ETCD 中 API 资源发生变化时，Reflector 组件将会获取到变化事件的信息，并将信息添加到一个 DeltaFIFO 的队列中；然后 Informer 组件会从这个 DeltaFIFO 队列中获取这个变化的事件信息存储到本地的 Indexer 中，并且根据事件的类型分发到提前注册好的不同的 Event Handler 中，从而调用到对应的用户实现的事件处理函数。</p>
+<p>client-go 中提供了几种不同的 Informer：</p>
+<ul>
+<li>通过调用 NewInformer 函数创建一个简单的不带 indexer 的 Informer。</li>
+<li>通过调用 NewIndexerInformer 函数创建一个简单的带 indexer 的 Informer。</li>
+<li>通过调用 NewSharedIndexInformer 函数创建一个 Shared 的 Informer。</li>
+<li>通过调用 NewDynamicSharedInformerFactory 函数创建一个为 Dynamic 客户端的 Shared 的 Informer。</li>
+</ul>
+<p>这里带有 Indexer 和不带 Indexer 的大家好理解写，从字面意思来看，就是一个是带有 Indexer 功能一个不带有 Indexer 功能的 Informer。而这里的 Shared 的 Informer 引入，其实是因为随着 K8S 中，相同资源的监听者在不断地增加，从而导致很多调用者通过 Watch API 对 API Server 建立一个长连接去监听事件的变化，这将严重增加了 API Server 的工作负载，及资源的浪费。比如在 kube-controller-manager 组件中，有很多控制管理都需要监听 Pod 资源的变化，如果都独立的调用 Informer 去维护一个对 APIServer 的长连接，这将导致 kube-controller-manager 中资源的浪费及增加了 APIServer 的负载，而不同控制管理者通过创建 Shared 的 Informer 则实现了这些控制管理者使用同一个 Watch 去和 APIServer 建立长连接，并在收到事件后，分发给下游的调用者。</p>
+<h2 id="informer-源码分析">Informer 源码分析</h2>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599376339/kubernetes/client-go/clientgo_i4vdl9.png" alt="&amp;ldquo;Informer class diagram&amp;rdquo;">
+
+</p>
+<p>该类图主要描述了 Informer 中主要的接口和类之前的调用关系。大家可以参考这个类图去阅读源码。下面我将主要对于 Reflector，Controller 和 Indexer 部分进行分析。对于 SharedInformer，这里我将不做过多的描述，如果有兴趣的话，可以参考 <a href="https://github.com/luffyao/k8s-studies/blob/master/source-code-analysis/client-go.md#sharedindexinformer-%E5%88%86%E6%9E%90">SharedIndexInformer 分析</a>.</p>
+<h2 id="reflector-源码分析">Reflector 源码分析</h2>
+<p>从上面我的讲述，相信大家应该了解到 Informer 中 Reflector 部分的主要职能，即它通过 list-watch 机制监听来自 ETCD 中各种资源事件的变化，并将这些事件添加到一个 DeltaFIFO 的队列中让 Controller 部分去消费。</p>
+<p>下面我们来看看 Reflector 的具体实现：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewReflector</span>(lw ListerWatcher, expectedType <span style="color:#8be9fd;font-style:italic">interface</span>{}, store Store, resyncPeriod time.Duration) <span style="color:#ff79c6">*</span>Reflector {
+    <span style="color:#ff79c6">return</span> <span style="color:#50fa7b">NewNamedReflector</span>(naming.<span style="color:#50fa7b">GetNameFromCallsite</span>(internalPackages<span style="color:#ff79c6">...</span>), lw, expectedType, store, resyncPeriod)
+}
+
+<span style="color:#6272a4">// NewNamedReflector same as NewReflector, but with a specified name for logging
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewNamedReflector</span>(name <span style="color:#8be9fd">string</span>, lw ListerWatcher, expectedType <span style="color:#8be9fd;font-style:italic">interface</span>{}, store Store, resyncPeriod time.Duration) <span style="color:#ff79c6">*</span>Reflector {
+    realClock <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>clock.RealClock{}
+    r <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>Reflector{
+        name:          name,
+        listerWatcher: lw,
+        store:         store,
+        <span style="color:#6272a4">// We used to make the call every 1sec (1 QPS), the goal here is to achieve ~98% traffic reduction when
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// API server is not healthy. With these parameters, backoff will stop at [30,60) sec interval which is
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// 0.22 QPS. If we don&#39;t backoff for 2min, assume API server is healthy and we reset the backoff.
+</span><span style="color:#6272a4"></span>        backoffManager: wait.<span style="color:#50fa7b">NewExponentialBackoffManager</span>(<span style="color:#bd93f9">800</span><span style="color:#ff79c6">*</span>time.Millisecond, <span style="color:#bd93f9">30</span><span style="color:#ff79c6">*</span>time.Second, <span style="color:#bd93f9">2</span><span style="color:#ff79c6">*</span>time.Minute, <span style="color:#bd93f9">2.0</span>, <span style="color:#bd93f9">1.0</span>, realClock),
+        resyncPeriod:   resyncPeriod,
+        clock:          realClock,
+    }
+    r.<span style="color:#50fa7b">setExpectedType</span>(expectedType)
+    <span style="color:#ff79c6">return</span> r
+}
+
+<span style="color:#6272a4">// Run repeatedly uses the reflector&#39;s ListAndWatch to fetch all the
+</span><span style="color:#6272a4">// objects and subsequent deltas.
+</span><span style="color:#6272a4">// Run will exit when stopCh is closed.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reflector) <span style="color:#50fa7b">Run</span>(stopCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}) {
+    klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">2</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;Starting reflector %s (%s) from %s&#34;</span>, r.expectedTypeName, r.resyncPeriod, r.name)
+    wait.<span style="color:#50fa7b">BackoffUntil</span>(<span style="color:#8be9fd;font-style:italic">func</span>() {
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">ListAndWatch</span>(stopCh); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            utilruntime.<span style="color:#50fa7b">HandleError</span>(err)
+        }
+    }, r.backoffManager, <span style="color:#ff79c6">true</span>, stopCh)
+    klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">2</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;Stopping reflector %s (%s) from %s&#34;</span>, r.expectedTypeName, r.resyncPeriod, r.name)
+}
+</code></pre></div><p>上面可以看到在 NewReflector 的时候将 ListerWatcher 和 queue 传了过来，并在调用 NewNamedReflector 函数时分别赋值给了 listerWatcher 和 store， 而当调用到 Run 函数的时候，就通过调用 ListAndWatch 函数进行核心操作。</p>
+<p>下面我们来看看 ListAndWatch 的具体实现逻辑：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// ListAndWatch first lists all items and get the resource version at the moment of call,
+</span><span style="color:#6272a4">// and then use the resource version to watch.
+</span><span style="color:#6272a4">// It returns error if ListAndWatch didn&#39;t even try to initialize watch.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reflector) <span style="color:#50fa7b">ListAndWatch</span>(stopCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}) <span style="color:#8be9fd">error</span> {
+    klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;Listing and watching %v from %s&#34;</span>, r.expectedTypeName, r.name)
+    <span style="color:#8be9fd;font-style:italic">var</span> resourceVersion <span style="color:#8be9fd">string</span>
+
+    options <span style="color:#ff79c6">:=</span> metav1.ListOptions{ResourceVersion: r.<span style="color:#50fa7b">relistResourceVersion</span>()}
+
+    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">error</span> {
+        initTrace <span style="color:#ff79c6">:=</span> trace.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;Reflector ListAndWatch&#34;</span>, trace.Field{<span style="color:#f1fa8c">&#34;name&#34;</span>, r.name})
+        <span style="color:#ff79c6">defer</span> initTrace.<span style="color:#50fa7b">LogIfLong</span>(<span style="color:#bd93f9">10</span> <span style="color:#ff79c6">*</span> time.Second)
+        <span style="color:#8be9fd;font-style:italic">var</span> list runtime.Object
+        <span style="color:#8be9fd;font-style:italic">var</span> paginatedResult <span style="color:#8be9fd">bool</span>
+        <span style="color:#8be9fd;font-style:italic">var</span> err <span style="color:#8be9fd">error</span>
+        listCh <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}, <span style="color:#bd93f9">1</span>)
+        panicCh <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#bd93f9">1</span>)
+        <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+            <span style="color:#ff79c6">defer</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+                <span style="color:#ff79c6">if</span> r <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">recover</span>(); r <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    panicCh <span style="color:#ff79c6">&lt;-</span> r
+                }
+            }()
+            <span style="color:#6272a4">// Attempt to gather list in chunks, if supported by listerWatcher, if not, the first
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// list request will return the full response.
+</span><span style="color:#6272a4"></span>            pager <span style="color:#ff79c6">:=</span> pager.<span style="color:#50fa7b">New</span>(pager.<span style="color:#50fa7b">SimplePageFunc</span>(<span style="color:#8be9fd;font-style:italic">func</span>(opts metav1.ListOptions) (runtime.Object, <span style="color:#8be9fd">error</span>) {
+                <span style="color:#ff79c6">return</span> r.listerWatcher.<span style="color:#50fa7b">List</span>(opts)
+            }))
+            <span style="color:#ff79c6">switch</span> {
+            <span style="color:#ff79c6">case</span> r.WatchListPageSize <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span>:
+                pager.PageSize = r.WatchListPageSize
+            <span style="color:#ff79c6">case</span> r.paginatedResult:
+                <span style="color:#6272a4">// We got a paginated result initially. Assume this resource and server honor
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// paging requests (i.e. watch cache is probably disabled) and leave the default
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// pager size set.
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">case</span> options.ResourceVersion <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;&#34;</span> <span style="color:#ff79c6">&amp;&amp;</span> options.ResourceVersion <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;0&#34;</span>:
+                <span style="color:#6272a4">// User didn&#39;t explicitly request pagination.
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">//
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// With ResourceVersion != &#34;&#34;, we have a possibility to list from watch cache,
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// but we do that (for ResourceVersion != &#34;0&#34;) only if Limit is unset.
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// To avoid thundering herd on etcd (e.g. on master upgrades), we explicitly
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// switch off pagination to force listing from watch cache (if enabled).
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// With the existing semantic of RV (result is at least as fresh as provided RV),
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// this is correct and doesn&#39;t lead to going back in time.
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">//
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// We also don&#39;t turn off pagination for ResourceVersion=&#34;0&#34;, since watch cache
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// is ignoring Limit in that case anyway, and if watch cache is not enabled
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// we don&#39;t introduce regression.
+</span><span style="color:#6272a4"></span>                pager.PageSize = <span style="color:#bd93f9">0</span>
+            }
+
+            list, paginatedResult, err = pager.<span style="color:#50fa7b">List</span>(context.<span style="color:#50fa7b">Background</span>(), options)
+            <span style="color:#ff79c6">if</span> <span style="color:#50fa7b">isExpiredError</span>(err) {
+                r.<span style="color:#50fa7b">setIsLastSyncResourceVersionExpired</span>(<span style="color:#ff79c6">true</span>)
+                <span style="color:#6272a4">// Retry immediately if the resource version used to list is expired.
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// The pager already falls back to full list if paginated list calls fail due to an &#34;Expired&#34; error on
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// continuation pages, but the pager might not be enabled, or the full list might fail because the
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// resource version it is listing at is expired, so we need to fallback to resourceVersion=&#34;&#34; in all
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// to recover and ensure the reflector makes forward progress.
+</span><span style="color:#6272a4"></span>                list, paginatedResult, err = pager.<span style="color:#50fa7b">List</span>(context.<span style="color:#50fa7b">Background</span>(), metav1.ListOptions{ResourceVersion: r.<span style="color:#50fa7b">relistResourceVersion</span>()})
+            }
+            <span style="color:#8be9fd;font-style:italic">close</span>(listCh)
+        }()
+        <span style="color:#ff79c6">select</span> {
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>stopCh:
+            <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+        <span style="color:#ff79c6">case</span> r <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>panicCh:
+            <span style="color:#8be9fd;font-style:italic">panic</span>(r)
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>listCh:
+        }
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: Failed to list %v: %v&#34;</span>, r.name, r.expectedTypeName, err)
+        }
+
+        <span style="color:#6272a4">// We check if the list was paginated and if so set the paginatedResult based on that.
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// However, we want to do that only for the initial list (which is the only case
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// when we set ResourceVersion=&#34;0&#34;). The reasoning behind it is that later, in some
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// situations we may force listing directly from etcd (by setting ResourceVersion=&#34;&#34;)
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// which will return paginated result, even if watch cache is enabled. However, in
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// that case, we still want to prefer sending requests to watch cache if possible.
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">//
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// Paginated result returned for request with ResourceVersion=&#34;0&#34; mean that watch
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// cache is disabled and there are a lot of objects of a given type. In such case,
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// there is no need to prefer listing from watch cache.
+</span><span style="color:#6272a4"></span>        <span style="color:#ff79c6">if</span> options.ResourceVersion <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;0&#34;</span> <span style="color:#ff79c6">&amp;&amp;</span> paginatedResult {
+            r.paginatedResult = <span style="color:#ff79c6">true</span>
+        }
+
+        r.<span style="color:#50fa7b">setIsLastSyncResourceVersionExpired</span>(<span style="color:#ff79c6">false</span>) <span style="color:#6272a4">// list was successful
+</span><span style="color:#6272a4"></span>        initTrace.<span style="color:#50fa7b">Step</span>(<span style="color:#f1fa8c">&#34;Objects listed&#34;</span>)
+        listMetaInterface, err <span style="color:#ff79c6">:=</span> meta.<span style="color:#50fa7b">ListAccessor</span>(list)
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: Unable to understand list result %#v: %v&#34;</span>, r.name, list, err)
+        }
+        resourceVersion = listMetaInterface.<span style="color:#50fa7b">GetResourceVersion</span>()
+        initTrace.<span style="color:#50fa7b">Step</span>(<span style="color:#f1fa8c">&#34;Resource version extracted&#34;</span>)
+        items, err <span style="color:#ff79c6">:=</span> meta.<span style="color:#50fa7b">ExtractList</span>(list)
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: Unable to understand list result %#v (%v)&#34;</span>, r.name, list, err)
+        }
+        initTrace.<span style="color:#50fa7b">Step</span>(<span style="color:#f1fa8c">&#34;Objects extracted&#34;</span>)
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">syncWith</span>(items, resourceVersion); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: Unable to sync list result: %v&#34;</span>, r.name, err)
+        }
+        initTrace.<span style="color:#50fa7b">Step</span>(<span style="color:#f1fa8c">&#34;SyncWith done&#34;</span>)
+        r.<span style="color:#50fa7b">setLastSyncResourceVersion</span>(resourceVersion)
+        initTrace.<span style="color:#50fa7b">Step</span>(<span style="color:#f1fa8c">&#34;Resource version updated&#34;</span>)
+        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+    }(); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+        <span style="color:#ff79c6">return</span> err
+    }
+
+    resyncerrc <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">error</span>, <span style="color:#bd93f9">1</span>)
+    cancelCh <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{})
+    <span style="color:#ff79c6">defer</span> <span style="color:#8be9fd;font-style:italic">close</span>(cancelCh)
+    <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+        resyncCh, cleanup <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">resyncChan</span>()
+        <span style="color:#ff79c6">defer</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+            <span style="color:#50fa7b">cleanup</span>() <span style="color:#6272a4">// Call the last one written into cleanup
+</span><span style="color:#6272a4"></span>        }()
+        <span style="color:#ff79c6">for</span> {
+            <span style="color:#ff79c6">select</span> {
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>resyncCh:
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>stopCh:
+                <span style="color:#ff79c6">return</span>
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>cancelCh:
+                <span style="color:#ff79c6">return</span>
+            }
+            <span style="color:#ff79c6">if</span> r.ShouldResync <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">||</span> r.<span style="color:#50fa7b">ShouldResync</span>() {
+                klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;%s: forcing resync&#34;</span>, r.name)
+                <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> r.store.<span style="color:#50fa7b">Resync</span>(); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    resyncerrc <span style="color:#ff79c6">&lt;-</span> err
+                    <span style="color:#ff79c6">return</span>
+                }
+            }
+            <span style="color:#50fa7b">cleanup</span>()
+            resyncCh, cleanup = r.<span style="color:#50fa7b">resyncChan</span>()
+        }
+    }()
+
+    <span style="color:#ff79c6">for</span> {
+        <span style="color:#6272a4">// give the stopCh a chance to stop the loop, even in case of continue statements further down on errors
+</span><span style="color:#6272a4"></span>        <span style="color:#ff79c6">select</span> {
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>stopCh:
+            <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+        <span style="color:#ff79c6">default</span>:
+        }
+
+        timeoutSeconds <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">int64</span>(minWatchTimeout.<span style="color:#50fa7b">Seconds</span>() <span style="color:#ff79c6">*</span> (rand.<span style="color:#50fa7b">Float64</span>() <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">1.0</span>))
+        options = metav1.ListOptions{
+            ResourceVersion: resourceVersion,
+            <span style="color:#6272a4">// We want to avoid situations of hanging watchers. Stop any wachers that do not
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// receive any events within the timeout window.
+</span><span style="color:#6272a4"></span>            TimeoutSeconds: <span style="color:#ff79c6">&amp;</span>timeoutSeconds,
+            <span style="color:#6272a4">// To reduce load on kube-apiserver on watch restarts, you may enable watch bookmarks.
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// Reflector doesn&#39;t assume bookmarks are returned at all (if the server do not support
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// watch bookmarks, it will ignore this field).
+</span><span style="color:#6272a4"></span>            AllowWatchBookmarks: <span style="color:#ff79c6">true</span>,
+        }
+
+        <span style="color:#6272a4">// start the clock before sending the request, since some proxies won&#39;t flush headers until after the first watch event is sent
+</span><span style="color:#6272a4"></span>        start <span style="color:#ff79c6">:=</span> r.clock.<span style="color:#50fa7b">Now</span>()
+        w, err <span style="color:#ff79c6">:=</span> r.listerWatcher.<span style="color:#50fa7b">Watch</span>(options)
+
+        <span style="color:#6272a4">//...........................................
+</span><span style="color:#6272a4"></span>
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">watchHandler</span>(start, w, <span style="color:#ff79c6">&amp;</span>resourceVersion, resyncerrc, stopCh); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#6272a4">//...........................................
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+        }
+    }
+}
+
+<span style="color:#6272a4">// watchHandler watches w and keeps *resourceVersion up to date.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reflector) <span style="color:#50fa7b">watchHandler</span>(start time.Time, w watch.Interface, resourceVersion <span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, errc <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">error</span>, stopCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}) <span style="color:#8be9fd">error</span> {
+    eventCount <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
+
+    <span style="color:#6272a4">// Stopping the watcher should be idempotent and if we return from this function there&#39;s no way
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// we&#39;re coming back in with the same watch interface.
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">defer</span> w.<span style="color:#50fa7b">Stop</span>()
+
+loop:
+    <span style="color:#ff79c6">for</span> {
+        <span style="color:#ff79c6">select</span> {
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>stopCh:
+            <span style="color:#ff79c6">return</span> errorStopRequested
+        <span style="color:#ff79c6">case</span> err <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>errc:
+            <span style="color:#ff79c6">return</span> err
+        <span style="color:#ff79c6">case</span> event, ok <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>w.<span style="color:#50fa7b">ResultChan</span>():
+            <span style="color:#ff79c6">if</span> !ok {
+                <span style="color:#ff79c6">break</span> loop
+            }
+            <span style="color:#ff79c6">if</span> event.Type <span style="color:#ff79c6">==</span> watch.Error {
+                <span style="color:#ff79c6">return</span> apierrors.<span style="color:#50fa7b">FromObject</span>(event.Object)
+            }
+            <span style="color:#ff79c6">if</span> r.expectedType <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                <span style="color:#ff79c6">if</span> e, a <span style="color:#ff79c6">:=</span> r.expectedType, reflect.<span style="color:#50fa7b">TypeOf</span>(event.Object); e <span style="color:#ff79c6">!=</span> a {
+                    utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: expected type %v, but watch event object had type %v&#34;</span>, r.name, e, a))
+                    <span style="color:#ff79c6">continue</span>
+                }
+            }
+            <span style="color:#ff79c6">if</span> r.expectedGVK <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                <span style="color:#ff79c6">if</span> e, a <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">*</span>r.expectedGVK, event.Object.<span style="color:#50fa7b">GetObjectKind</span>().<span style="color:#50fa7b">GroupVersionKind</span>(); e <span style="color:#ff79c6">!=</span> a {
+                    utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: expected gvk %v, but watch event object had gvk %v&#34;</span>, r.name, e, a))
+                    <span style="color:#ff79c6">continue</span>
+                }
+            }
+            meta, err <span style="color:#ff79c6">:=</span> meta.<span style="color:#50fa7b">Accessor</span>(event.Object)
+            <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: unable to understand watch event %#v&#34;</span>, r.name, event))
+                <span style="color:#ff79c6">continue</span>
+            }
+            newResourceVersion <span style="color:#ff79c6">:=</span> meta.<span style="color:#50fa7b">GetResourceVersion</span>()
+            <span style="color:#ff79c6">switch</span> event.Type {
+            <span style="color:#ff79c6">case</span> watch.Added:
+                err <span style="color:#ff79c6">:=</span> r.store.<span style="color:#50fa7b">Add</span>(event.Object)
+                <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: unable to add watch event object (%#v) to store: %v&#34;</span>, r.name, event.Object, err))
+                }
+            <span style="color:#ff79c6">case</span> watch.Modified:
+                err <span style="color:#ff79c6">:=</span> r.store.<span style="color:#50fa7b">Update</span>(event.Object)
+                <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: unable to update watch event object (%#v) to store: %v&#34;</span>, r.name, event.Object, err))
+                }
+            <span style="color:#ff79c6">case</span> watch.Deleted:
+                <span style="color:#6272a4">// TODO: Will any consumers need access to the &#34;last known
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// state&#34;, which is passed in event.Object? If so, may need
+</span><span style="color:#6272a4"></span>                <span style="color:#6272a4">// to change this.
+</span><span style="color:#6272a4"></span>                err <span style="color:#ff79c6">:=</span> r.store.<span style="color:#50fa7b">Delete</span>(event.Object)
+                <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: unable to delete watch event object (%#v) from store: %v&#34;</span>, r.name, event.Object, err))
+                }
+            <span style="color:#ff79c6">case</span> watch.Bookmark:
+                <span style="color:#6272a4">// A `Bookmark` means watch has synced here, just update the resourceVersion
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">default</span>:
+                utilruntime.<span style="color:#50fa7b">HandleError</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s: unable to understand watch event %#v&#34;</span>, r.name, event))
+            }
+            <span style="color:#ff79c6">*</span>resourceVersion = newResourceVersion
+            r.<span style="color:#50fa7b">setLastSyncResourceVersion</span>(newResourceVersion)
+            eventCount<span style="color:#ff79c6">++</span>
+        }
+    }
+
+    watchDuration <span style="color:#ff79c6">:=</span> r.clock.<span style="color:#50fa7b">Since</span>(start)
+    <span style="color:#ff79c6">if</span> watchDuration &lt; <span style="color:#bd93f9">1</span><span style="color:#ff79c6">*</span>time.Second <span style="color:#ff79c6">&amp;&amp;</span> eventCount <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
+        <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;very short watch: %s: Unexpected watch close - watch lasted less than a second and no items received&#34;</span>, r.name)
+    }
+    klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;%s: Watch close - %v total %v items received&#34;</span>, r.name, r.expectedTypeName, eventCount)
+    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+}
+</code></pre></div><p>这个函数则实现了上述描述的 Reflector 的主要功能，List Watch API 资源，并将结果添加到 DeltaFIFO 队列中。</p>
+<h2 id="controller-源码分析">Controller 源码分析</h2>
+<p>对于 Controller 部分，则是取出从 Reflector 部分添加到 DeltaFIFO 队列中数据，并进行处理。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// `*controller` implements Controller
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> controller <span style="color:#8be9fd;font-style:italic">struct</span> {
+    config         Config
+    reflector      <span style="color:#ff79c6">*</span>Reflector
+    reflectorMutex sync.RWMutex
+    clock          clock.Clock
+}
+
+<span style="color:#6272a4">// Run begins processing items, and will continue until a value is sent down stopCh or it is closed.
+</span><span style="color:#6272a4">// It&#39;s an error to call Run more than once.
+</span><span style="color:#6272a4">// Run blocks; call via go.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>controller) <span style="color:#50fa7b">Run</span>(stopCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}) {
+    <span style="color:#ff79c6">defer</span> utilruntime.<span style="color:#50fa7b">HandleCrash</span>()
+    <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+        <span style="color:#ff79c6">&lt;-</span>stopCh
+        c.config.Queue.<span style="color:#50fa7b">Close</span>()
+    }()
+    r <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewReflector</span>(
+        c.config.ListerWatcher,
+        c.config.ObjectType,
+        c.config.Queue,
+        c.config.FullResyncPeriod,
+    )
+    r.ShouldResync = c.config.ShouldResync
+    r.clock = c.clock
+
+    c.reflectorMutex.<span style="color:#50fa7b">Lock</span>()
+    c.reflector = r
+    c.reflectorMutex.<span style="color:#50fa7b">Unlock</span>()
+
+    <span style="color:#8be9fd;font-style:italic">var</span> wg wait.Group
+    <span style="color:#ff79c6">defer</span> wg.<span style="color:#50fa7b">Wait</span>()
+
+    wg.<span style="color:#50fa7b">StartWithChannel</span>(stopCh, r.Run)
+
+    wait.<span style="color:#50fa7b">Until</span>(c.processLoop, time.Second, stopCh)
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>controller) <span style="color:#50fa7b">processLoop</span>() {
+    <span style="color:#ff79c6">for</span> {
+        obj, err <span style="color:#ff79c6">:=</span> c.config.Queue.<span style="color:#50fa7b">Pop</span>(<span style="color:#50fa7b">PopProcessFunc</span>(c.config.Process))
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">==</span> ErrFIFOClosed {
+                <span style="color:#ff79c6">return</span>
+            }
+            <span style="color:#ff79c6">if</span> c.config.RetryOnError {
+                <span style="color:#6272a4">// This is the safe way to re-enqueue.
+</span><span style="color:#6272a4"></span>                c.config.Queue.<span style="color:#50fa7b">AddIfNotPresent</span>(obj)
+            }
+        }
+    }
+}
+</code></pre></div><p>从 controller 结构的定义来看，它包含了一个 Reflector 部分，然后在 Run 函数里，可以看到创建了一个 Reflector 对象，并调用了 Reflector 实例的 Run 函数，并调用 c.processLoop 函数进行数据的处理。具体细节请参考 <a href="https://github.com/luffyao/k8s-studies/blob/master/source-code-analysis/client-go.md#sharedprocessor-%E5%88%86%E6%9E%90">sharedProcessor 分析</a></p>
+<h2 id="indexer-源码分析">Indexer 源码分析</h2>
+<ol>
+<li><strong>Store</strong> : 是一个通用对象存储和处理接口。</li>
+<li><strong>Indexer</strong> : Indexer 扩展了多个索引的 Store，并限制每个累加器只保存当前对象（删除后为空）。</li>
+<li><strong>cache</strong> : 根据 ThreadSafeStore 和关联的 KeyFunc 实现的 Indexer。</li>
+<li><strong>ThreadSafeStore</strong> : 是一个允许对存储后端进行并发索引访问的接口。它类似于 Indexer，但不（必须）知道如何从给定对象中提取存储键。</li>
+<li><strong>threadSafeMap</strong> : 实现了 ThreadSafeStore。</li>
+</ol>
+<p>下面为具体的类图展示：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599376339/kubernetes/client-go/indexer_qzlzfy.png" alt="&amp;ldquo;indexer&amp;rdquo;">
+
+</p>
+<h3 id="threadsafemap-源码分析">threadSafeMap 源码分析</h3>
+<p><strong>threadSafeMap</strong> 类中包含下面三个属性：</p>
+<ol>
+<li><code>items map[string]interface{}</code> 保存所有数据的 map 结构。</li>
+<li><code>indexers Indexers</code> 通过一个名字映射一个 IndexFunc 索引处理函数。</li>
+<li><code>indices Indices</code> 通过一个名字映射一个 Index。</li>
+</ol>
+<p>下面是 threadSafeMap 结构的源码定义：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// threadSafeMap implements ThreadSafeStore
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> threadSafeMap <span style="color:#8be9fd;font-style:italic">struct</span> {
+    lock  sync.RWMutex
+    items <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd;font-style:italic">interface</span>{}
+
+    <span style="color:#6272a4">// indexers maps a name to an IndexFunc
+</span><span style="color:#6272a4"></span>    indexers Indexers
+    <span style="color:#6272a4">// indices maps a name to an Index
+</span><span style="color:#6272a4"></span>    indices Indices
+}
+</code></pre></div><p>下面是 Indexers, Indices and Index 的源码定义：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// IndexFunc knows how to compute the set of indexed values for an object.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> IndexFunc <span style="color:#8be9fd;font-style:italic">func</span>(obj <span style="color:#8be9fd;font-style:italic">interface</span>{}) ([]<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>)
+
+<span style="color:#6272a4">// Index maps the indexed value to a set of keys in the store that match on that value
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> Index <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]sets.String
+
+<span style="color:#6272a4">// Indexers maps a name to a IndexFunc
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> Indexers <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]IndexFunc
+
+<span style="color:#6272a4">// Indices maps a name to an Index
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> Indices <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]Index
+</code></pre></div><p>这是一个 threadSafeMap 存储结构的示例图：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599376339/kubernetes/client-go/threadSafeMapStorageStructure_o8godl.png" alt="&amp;ldquo;threadSafeMapStorageStructure&amp;rdquo;">
+
+</p>
+<p>最后以添加一个新的对象到 threadSafeMap 为例，分析具体需要哪些操作。</p>
+<p>首先列出源码以供参考：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>threadSafeMap) <span style="color:#50fa7b">Add</span>(key <span style="color:#8be9fd">string</span>, obj <span style="color:#8be9fd;font-style:italic">interface</span>{}) {
+    c.lock.<span style="color:#50fa7b">Lock</span>()
+    <span style="color:#ff79c6">defer</span> c.lock.<span style="color:#50fa7b">Unlock</span>()
+    oldObject <span style="color:#ff79c6">:=</span> c.items[key]
+    c.items[key] = obj
+    c.<span style="color:#50fa7b">updateIndices</span>(oldObject, obj, key)
+}
+
+<span style="color:#6272a4">// updateIndices modifies the objects location in the managed indexes, if this is an update, you must provide an oldObj
+</span><span style="color:#6272a4">// updateIndices must be called from a function that already has a lock on the cache
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>threadSafeMap) <span style="color:#50fa7b">updateIndices</span>(oldObj <span style="color:#8be9fd;font-style:italic">interface</span>{}, newObj <span style="color:#8be9fd;font-style:italic">interface</span>{}, key <span style="color:#8be9fd">string</span>) {
+    <span style="color:#6272a4">// if we got an old object, we need to remove it before we add it again
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">if</span> oldObj <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+        c.<span style="color:#50fa7b">deleteFromIndices</span>(oldObj, key)
+    }
+    <span style="color:#ff79c6">for</span> name, indexFunc <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> c.indexers {
+        indexValues, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">indexFunc</span>(newObj)
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#8be9fd;font-style:italic">panic</span>(fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;unable to calculate an index entry for key %q on index %q: %v&#34;</span>, key, name, err))
+        }
+        index <span style="color:#ff79c6">:=</span> c.indices[name]
+        <span style="color:#ff79c6">if</span> index <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+            index = Index{}
+            c.indices[name] = index
+        }
+
+        <span style="color:#ff79c6">for</span> _, indexValue <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> indexValues {
+            set <span style="color:#ff79c6">:=</span> index[indexValue]
+            <span style="color:#ff79c6">if</span> set <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+                set = sets.String{}
+                index[indexValue] = set
+            }
+            set.<span style="color:#50fa7b">Insert</span>(key)
+        }
+    }
+}
+</code></pre></div><p>从上面代码可以总结出下面几个步骤：</p>
+<ol>
+<li>从 items 中获取旧的对象值，并将新的对象添加到 items 中指定键值的位置。</li>
+<li>将新加入对象的键值更新到索引中。
+<ol>
+<li>如果旧的对象存在，则将其从索引中删除，否则进行下一步。</li>
+<li>迭代 indexers 进行新对象的索引处理。</li>
+<li>通过 indexers 中的 indexFunc 处理新对象，找到相应的 indexValues。</li>
+<li>使用 indexer 的 name 从 indices 中找到对应的 index。如果对应的 index 是空，则创建一个新的 index。</li>
+<li>迭代 indexValues 进行 index 处理。</li>
+<li>通过 indexValue 在 index 中找到对应的 set， 如果 set 不存在，则创建一个新的 set。并添加到 index 中。</li>
+<li>添加新对象的键值到 set 中。</li>
+<li>返回第 5 步，直到迭代完成。</li>
+<li>返回第 2 步，直到迭代完成。</li>
+</ol>
+</li>
+</ol>
+<h2 id="参考文章">参考文章</h2>
+<ul>
+<li><a href="https://github.com/kubernetes/client-go">Source code</a></li>
+<li><a href="https://tangxusc.github.io/blog/2019/05/client-go-informer%E6%9C%BA%E5%88%B6/">Client-Go informer 机制</a></li>
+<li><a href="https://www.jianshu.com/p/76e7b1a57d2c">informer 之 store 和 index</a></li>
+<li><a href="https://xigang.github.io/2019/09/21/client-go/">Kubernetes Client-Go Informer 实现源码剖析</a></li>
+<li><a href="http://www.programmersought.com/article/6135240470/">client-go package Informer source code analysis</a></li>
+<li><a href="https://www.huweihuang.com/kubernetes-notes/code-analysis/kube-controller-manager/sharedIndexInformer.html">kube-controller-manager 源码分析（三）之 Informer 机制</a></li>
+<li><a href="https://studygolang.com/articles/20402">Indexer</a></li>
+<li><a href="https://zh.wikipedia.org/zh-hans/%E5%88%86%E5%9D%97%E4%BC%A0%E8%BE%93%E7%BC%96%E7%A0%81">分块传输编码</a></li>
+<li><a href="https://github.com/luffyao/k8s-studies/blob/master/source-code-analysis/client-go.md">k8s client-go informer 源码分析</a></li>
+</ul>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2020/09/http2_write_on_closed_buffer_error/" data-toggle="tooltip" data-placement="top" title="write on closed buffer 错误分析">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2021/04/raft-summary/" data-toggle="tooltip" data-placement="top" title="分布式一致性算法 Raft 论文学习总结">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

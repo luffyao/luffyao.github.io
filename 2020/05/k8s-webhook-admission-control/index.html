@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="client-go 实现准入 webhook" />
+    <meta property="og:title" content="client-go 实现准入 webhook" />
+    <meta property="twitter:title" content="client-go 实现准入 webhook" />
+    
+
+    
+    <meta name="description" content="client-go 实现一个简单的准入 webhook。">
+    <meta property="og:description" content="client-go 实现一个简单的准入 webhook。" />
+    <meta property="twitter:description" content="client-go 实现一个简单的准入 webhook。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="Kubernetes,client-go,webhook">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>client-go 实现准入 webhook | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2020/05/k8s-webhook-admission-control/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/kubernetes" title="Kubernetes">
+                            Kubernetes
+                        </a>
+                        
+                    </div>
+                    <h1>client-go 实现准入 webhook</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Wednesday, May 13, 2020
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h1 id="什么是准入-webhook">什么是准入 webhook</h1>
+<p>准入 webhooks 是一个接收 admission 请求并对其做些处理的 HTTP 回调。你可以定义两种准入 webhook,<a href="https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#validatingadmissionwebhook">validating admission webhook</a> and <a href="https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#mutatingadmissionwebhook">mutating admission webhook</a>。mutating admission webhook 首先被调用，然后可以修改请求内容，再发送到 API server 去执行。当所有的内容修改执行完成后，就会执行到了 validating 的过程，此时会调用 validating admission webhook 去执行自定义的策略。</p>
+<p>下图展示了整个准入控制器阶段</p>
+<p>
+  <img src="/img/blog/images/webhook/apiserverflow.png" alt="">
+
+</p>
+<h1 id="编写自定义的动态准入-webhook">编写自定义的动态准入 webhook</h1>
+<p>你可以参考 <a href="https://github.com/luffyao/k8s-studies/tree/master/playground/dynamic-admission-webhook">example</a>, 这个例子实现了一个自定义的** validating admission webhook**, 并且可以自动的生成证书去更新 validatingwebhookconfiguration 中的 ca_Bound. 后面将增加 mutating admission webhook 的例子。目前下面我将按照这个例子演示怎么编写自定义的准入 webhook.</p>
+<h2 id="前提条件">前提条件</h2>
+<ul>
+<li>
+<p>确保 k8s cluster 版本比 v1.16 (to use admissionregistration.k8s.io/v1) 新或者等于，或者 v1.9 (to use admissionregistration.k8s.io/v1beta1).</p>
+</li>
+<li>
+<p>确保开启了 MutatingAdmissionWebhook 和 ValidatingAdmissionWebhook 准入 controllers.</p>
+</li>
+<li>
+<p>确保开启了 admissionregistration.k8s.io/v1 或者 admissionregistration.k8s.io/v1beta1 API</p>
+</li>
+</ul>
+<h2 id="编写-webhook-server">编写 webhook server</h2>
+<p>首先要编写一个 HTTPS server 作为 webhook server。功能是接收请求并做相应的处理。你可以参考 <a href="https://github.com/luffyao/k8s-studies/blob/master/playground/dynamic-admission-webhook/httpsserver/server.go">httpsserver</a>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewServer</span>(port <span style="color:#8be9fd">string</span>, whs <span style="color:#ff79c6">*</span>webhook.WebhookService, config <span style="color:#ff79c6">*</span>tls.Config) <span style="color:#ff79c6">*</span>http.Server {
+
+	handler <span style="color:#ff79c6">:=</span> handler{
+		<span style="color:#ff79c6">&amp;</span>logic{
+			webhookserver: whs,
+		},
+	}
+	h2s <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>http2.Server{}
+
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>http.Server{
+		Addr:      port,
+		Handler:   h2c.<span style="color:#50fa7b">NewHandler</span>(handler, h2s),
+		TLSConfig: config,
+	}
+}
+
+<span style="color:#8be9fd;font-style:italic">type</span> logic <span style="color:#8be9fd;font-style:italic">struct</span> {
+	webhookserver <span style="color:#ff79c6">*</span>webhook.WebhookService
+}
+
+<span style="color:#8be9fd;font-style:italic">type</span> handler <span style="color:#8be9fd;font-style:italic">struct</span> {
+	logic <span style="color:#ff79c6">*</span>logic
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (h handler) <span style="color:#50fa7b">ServeHTTP</span>(w http.ResponseWriter, r <span style="color:#ff79c6">*</span>http.Request) {
+
+	<span style="color:#ff79c6">if</span> r.URL.Path <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;/validate&#34;</span> {
+		h.logic.webhookserver.<span style="color:#50fa7b">Server</span>(w, r)
+		<span style="color:#ff79c6">return</span>
+	}
+}
+</code></pre></div><p>主要的处理逻辑可参考下面给出部分处理代码。完整部分可参考 <a href="https://github.com/luffyao/k8s-studies/blob/master/playground/dynamic-admission-webhook/webhook/webhookserver.go">webhookserver</a>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (service <span style="color:#ff79c6">*</span>WebhookService) <span style="color:#50fa7b">Server</span>(
+	w http.ResponseWriter, r <span style="color:#ff79c6">*</span>http.Request) {
+
+	contentType <span style="color:#ff79c6">:=</span> r.Header.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;Content-Type&#34;</span>)
+	<span style="color:#ff79c6">if</span> contentType <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;application/json&#34;</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusUnsupportedMediaType, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;Unsupported Content-Type: %s&#34;</span>, contentType))
+		<span style="color:#ff79c6">return</span>
+	}
+	<span style="color:#ff79c6">if</span> r.Body <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusBadRequest, <span style="color:#f1fa8c">&#34;Empty request body&#34;</span>)
+		<span style="color:#ff79c6">return</span>
+	}
+
+	body, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(r.Body)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusBadRequest, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;Error reading request body: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>()))
+		<span style="color:#ff79c6">return</span>
+	}
+
+	<span style="color:#8be9fd;font-style:italic">var</span> admissionResponse <span style="color:#ff79c6">*</span>v1beta1.AdmissionResponse
+	admissionReview <span style="color:#ff79c6">:=</span> v1beta1.AdmissionReview{}
+	deserializer <span style="color:#ff79c6">:=</span> service.codecs.<span style="color:#50fa7b">UniversalDeserializer</span>()
+	<span style="color:#ff79c6">if</span> _, _, err = deserializer.<span style="color:#50fa7b">Decode</span>(body, <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">&amp;</span>admissionReview); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusBadRequest,
+			fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;Error parsing request body: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>()))
+		<span style="color:#ff79c6">return</span>
+	} <span style="color:#ff79c6">else</span> {
+		admissionResponse = service.<span style="color:#50fa7b">validate</span>(<span style="color:#ff79c6">&amp;</span>admissionReview)
+	}
+	<span style="color:#ff79c6">if</span> admissionResponse <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		admissionReview.Response = admissionResponse
+		<span style="color:#ff79c6">if</span> admissionReview.Request <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			admissionReview.Response.UID = admissionReview.Request.UID
+		}
+	}
+
+	resp, err <span style="color:#ff79c6">:=</span> json.<span style="color:#50fa7b">Marshal</span>(admissionReview)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusInternalServerError,
+			fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;could not encode response: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>()))
+	}
+	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> w.<span style="color:#50fa7b">Write</span>(resp); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#50fa7b">errorResponse</span>(w, http.StatusInternalServerError,
+			fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;could not write response: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>()))
+	}
+}
+</code></pre></div><p>这里处理了收到哪些 resource，然后做对应的处理。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (whsvr <span style="color:#ff79c6">*</span>WebhookService) <span style="color:#50fa7b">validate</span>(ar <span style="color:#ff79c6">*</span>v1beta1.AdmissionReview) <span style="color:#ff79c6">*</span>v1beta1.AdmissionResponse {
+	req <span style="color:#ff79c6">:=</span> ar.Request
+
+	<span style="color:#ff79c6">switch</span> req.Kind.Kind {
+	<span style="color:#ff79c6">case</span> <span style="color:#f1fa8c">&#34;Deployment&#34;</span>:
+		isAllow <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">false</span>
+		<span style="color:#6272a4">//TODO: logic handling
+</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>v1beta1.AdmissionResponse{
+			Allowed: isAllow,
+		}
+	<span style="color:#ff79c6">case</span> <span style="color:#f1fa8c">&#34;Scale&#34;</span>:
+		isAllow <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">false</span>
+		<span style="color:#6272a4">//TODO: logic handling
+</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>v1beta1.AdmissionResponse{
+			Allowed: isAllow,
+		}
+	}
+
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>v1beta1.AdmissionResponse{
+		Allowed: <span style="color:#ff79c6">false</span>,
+		Result: <span style="color:#ff79c6">&amp;</span>metav1.Status{
+			Reason: <span style="color:#f1fa8c">&#34;UnSupported resource&#34;</span>,
+		},
+	}
+}
+</code></pre></div><h2 id="编译代码并生成-docker-image">编译代码并生成 docker image</h2>
+<p>可以参考我提供的简单脚本编译代码。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#ff79c6">#!/bin/sh
+</span><span style="color:#ff79c6"></span><span style="color:#8be9fd;font-style:italic">GOOS</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOOS</span><span style="color:#ff79c6">:-</span><span style="color:#8be9fd;font-style:italic">linux</span><span style="color:#f1fa8c">}</span>
+<span style="color:#8be9fd;font-style:italic">GOARCH</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOARCH</span><span style="color:#ff79c6">:-</span><span style="color:#8be9fd;font-style:italic">amd64</span><span style="color:#f1fa8c">}</span>
+<span style="color:#8be9fd;font-style:italic">GOBINARY</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOBINARY</span><span style="color:#ff79c6">:-</span><span style="color:#8be9fd;font-style:italic">go</span><span style="color:#f1fa8c">}</span>
+<span style="color:#8be9fd;font-style:italic">LDFLAGS</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;-extldflags -static&#34;</span>
+<span style="color:#8be9fd;font-style:italic">BINDIR</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;.release/bin&#34;</span>
+<span style="color:#8be9fd;font-style:italic">PACKAGES</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">`</span>go list ./cmd/...<span style="color:#f1fa8c">`</span>
+<span style="color:#8be9fd;font-style:italic">export</span> <span style="color:#8be9fd;font-style:italic">CGO_ENABLED</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>
+
+<span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;go mod vendor&#34;</span>
+
+go mod vendor
+
+<span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;Generating files...&#34;</span>
+<span style="color:#ff79c6">for</span> i in <span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">PACKAGES</span><span style="color:#f1fa8c">}</span>; <span style="color:#ff79c6">do</span>
+  <span style="color:#8be9fd;font-style:italic">NAME</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">`</span>basename <span style="color:#8be9fd;font-style:italic">$i</span><span style="color:#f1fa8c">`</span>
+  <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;Building </span><span style="color:#8be9fd;font-style:italic">$i</span><span style="color:#f1fa8c">...&#34;</span>
+  <span style="color:#8be9fd;font-style:italic">GOOS</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOOS</span><span style="color:#f1fa8c">}</span> <span style="color:#8be9fd;font-style:italic">GOARCH</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOARCH</span><span style="color:#f1fa8c">}</span> <span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">GOBINARY</span><span style="color:#f1fa8c">}</span> build -o <span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">BINDIR</span><span style="color:#f1fa8c">}</span>/dynamic-webhook -ldflags <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">LDFLAGS</span><span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span> <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">i</span><span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+  <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;Installed .release/bin/dynamic-webhook&#34;</span>
+<span style="color:#ff79c6">done</span>
+</code></pre></div><p>构建 docker 镜像，<em><strong>这里需要注意的是，生成的 tag 需要传入</strong></em>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#ff79c6">#!/bin/bash
+</span><span style="color:#ff79c6"></span>
+<span style="color:#8be9fd;font-style:italic">TAG</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">$1</span>
+docker build --no-cache -t example:<span style="color:#8be9fd;font-style:italic">$TAG</span> .
+rm -rf release
+docker tag example:<span style="color:#8be9fd;font-style:italic">$TAG</span> dokcerhome/sandbox/webhook:<span style="color:#8be9fd;font-style:italic">$TAG</span>
+<span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;dokcerhome/sandbox/webhook:</span><span style="color:#8be9fd;font-style:italic">$TAG</span><span style="color:#f1fa8c">&#34;</span>
+</code></pre></div><h2 id="添加相应的-k8s-资源">添加相应的 k8s 资源</h2>
+<ol>
+<li>
+<p>添加 validatingwebhookconfiguration</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: admissionregistration.k8s.io/v1beta1
+<span style="color:#ff79c6">kind</span>: ValidatingWebhookConfiguration
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+<span style="color:#ff79c6">webhooks</span>:
+  - <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example.{{ .Release.Namespace }}.svc
+    <span style="color:#ff79c6">clientConfig</span>:
+      <span style="color:#ff79c6">service</span>:
+        <span style="color:#ff79c6">namespace</span>: {{ .Release.Namespace | quote }}
+        <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+        <span style="color:#ff79c6">path</span>: <span style="color:#f1fa8c">&#34;/validate&#34;</span>
+        <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">10000</span>
+      <span style="color:#ff79c6">caBundle</span>: <span style="color:#f1fa8c">&#34;&#34;</span>
+    <span style="color:#ff79c6">rules</span>:
+    - <span style="color:#ff79c6">apiGroups</span>:
+      - apps
+      <span style="color:#ff79c6">apiVersions</span>:
+      - v1
+      <span style="color:#ff79c6">operations</span>:
+      - UPDATE
+      <span style="color:#ff79c6">resources</span>:
+      - deployments
+      - deployments/scale
+      - replicasets/scale
+    <span style="color:#ff79c6">failurePolicy</span>: Ignore
+</code></pre></div></li>
+<li>
+<p>添加 RBAC 使得程序可以有权限修改 k8s 资源</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">    <span style="color:#ff79c6">apiVersion</span>: v1
+    <span style="color:#ff79c6">kind</span>: ServiceAccount
+    <span style="color:#ff79c6">metadata</span>:
+      <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+    ---
+    <span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1
+    <span style="color:#ff79c6">kind</span>: ClusterRole
+    <span style="color:#ff79c6">metadata</span>:
+      <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+    <span style="color:#ff79c6">rules</span>:
+    - <span style="color:#ff79c6">apiGroups</span>:
+      - admissionregistration.k8s.io
+      <span style="color:#ff79c6">resources</span>:
+      - validatingwebhookconfigurations
+      <span style="color:#ff79c6">verbs</span>: 
+      - <span style="color:#f1fa8c">&#39;*&#39;</span>
+    - <span style="color:#ff79c6">apiGroups</span>:
+      - <span style="color:#f1fa8c">&#34;&#34;</span>
+      <span style="color:#ff79c6">resources</span>:
+      - pods
+      - configmaps
+      <span style="color:#ff79c6">verbs</span>:
+      - <span style="color:#f1fa8c">&#39;*&#39;</span>
+    - <span style="color:#ff79c6">apiGroups</span>:
+      - <span style="color:#f1fa8c">&#34;apps&#34;</span>
+      - <span style="color:#f1fa8c">&#34;extensions&#34;</span>
+      <span style="color:#ff79c6">resources</span>:
+      - deployments
+      <span style="color:#ff79c6">verbs</span>:
+      - <span style="color:#f1fa8c">&#39;*&#39;</span>
+    ---
+    <span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1
+    <span style="color:#ff79c6">kind</span>: ClusterRoleBinding
+    <span style="color:#ff79c6">metadata</span>:
+      <span style="color:#ff79c6">name</span>:  dynamic-admission-webhook-example
+    <span style="color:#ff79c6">roleRef</span>:
+      <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
+      <span style="color:#ff79c6">kind</span>: ClusterRole
+      <span style="color:#ff79c6">name</span>:  dynamic-admission-webhook-example
+    <span style="color:#ff79c6">subjects</span>:
+    - <span style="color:#ff79c6">kind</span>: ServiceAccount
+      <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+      <span style="color:#ff79c6">namespace</span>: {{ .Release.Namespace }}
+</code></pre></div></li>
+<li>
+<p>最后就是 deployment 和 service 使得程序可以部署在 k8s 中</p>
+<p>NOTE: 需要将上一步骤生成的 docker 镜像更新下面 deployment 中的 containers.image 中</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#ff79c6">apiVersion</span>: apps/v1
+   <span style="color:#ff79c6">kind</span>: Deployment
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">replicas</span>: <span style="color:#bd93f9">1</span>
+     <span style="color:#ff79c6">selector</span>:
+       <span style="color:#ff79c6">matchLabels</span>:
+         <span style="color:#ff79c6">app.kubernetes.io/name</span>: dynamic-admission-webhook-example
+     <span style="color:#ff79c6">template</span>:
+       <span style="color:#ff79c6">metadata</span>:
+         <span style="color:#ff79c6">labels</span>:
+           <span style="color:#ff79c6">app</span>: dynamic-admission-webhook-example
+       <span style="color:#ff79c6">spec</span>:
+         <span style="color:#ff79c6">serviceAccountName</span>: dynamic-admission-webhook-example
+         <span style="color:#ff79c6">containers</span>:
+         - <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+           <span style="color:#ff79c6">image</span>: dokcerhome/sandbox/webhook:tag
+           <span style="color:#ff79c6">imagePullPolicy</span>: Always
+           <span style="color:#ff79c6">args</span>:
+           - -validatingwebhookname
+           - dynamic-admission-webhook-example
+           - -webhookserverport
+           - <span style="color:#f1fa8c">&#34;10000&#34;</span>
+           - -servicename
+           - dynamic-admission-webhook-example
+           - -namespace
+           - {{ .Release.Namespace | quote }}
+         <span style="color:#ff79c6">restartPolicy</span>: Always
+   ---
+   <span style="color:#ff79c6">apiVersion</span>: v1
+   <span style="color:#ff79c6">kind</span>: Service
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: dynamic-admission-webhook-example
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">type</span>: ClusterIP
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">name</span>: https-rest
+       <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">10000</span>
+       <span style="color:#ff79c6">targetPort</span>: <span style="color:#bd93f9">10000</span>
+     <span style="color:#ff79c6">selector</span>:
+       <span style="color:#ff79c6">app</span>: dynamic-admission-webhook-example
+</code></pre></div></li>
+</ol>
+<h2 id="测试">测试</h2>
+<p>例子中 default 的实现是拒绝任何对 deployment 和 scale 的修改。所以可以使用 kubectl edit 命令修改 deployment，或者使用 kubectl scale 命令修改 replicas。如果命令修改失败，则说明自定义的 validating webhook 是可以工作的。然后可以加上自己的处理逻辑即可。</p>
+<h1 id="参考">参考</h1>
+<ul>
+<li>
+<p><a href="https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/">Dynamic Admission Control</a></p>
+</li>
+<li>
+<p><a href="https://kubernetes.io/blog/2019/03/21/a-guide-to-kubernetes-admission-controllers/">A Guide to Kubernetes Admission Controllers</a></p>
+</li>
+</ul>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2020/04/hpack-summary/" data-toggle="tooltip" data-placement="top" title="RFC7541 HPACK 总结">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2020/05/admission-controller-webhook/" data-toggle="tooltip" data-placement="top" title="controller-runtime 实现准入 webhook">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

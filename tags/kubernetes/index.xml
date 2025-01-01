@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Kubernetes on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/kubernetes/</link>
+    <description>Recent content in Kubernetes on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Fri, 03 Sep 2021 09:20:23 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/kubernetes/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>记一次 Kubectl 删除 Pod 的过程分析</title>
+      <link>https://luffyao.github.io/2021/09/what-happened-when-delete-pod/</link>
+      <pubDate>Fri, 03 Sep 2021 09:20:23 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2021/09/what-happened-when-delete-pod/</guid>
+      <description>前言 当你输入 kubectl delete pods podname 时，K8s 到底是如何将你的 pod 杀死的呢。这篇文章将从源码的角度，带你一起分析这个过程。 分析 当我们调用 Kubectl delete pods 命令的时候，ku</description>
+    </item>
+    
+    <item>
+      <title>client-go 之 Informer 篇</title>
+      <link>https://luffyao.github.io/2020/10/clientgoinformer/</link>
+      <pubDate>Sat, 17 Oct 2020 17:05:35 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/10/clientgoinformer/</guid>
+      <description>client-go 源码学习系列： client-go 之概述篇 client-go 之 Informer 篇 client-go 之 WorkQueue 篇 前言 在上篇文章中主要讲解了 client-go 中主要源码目录结构，client-go 提供的各种客户端接口，并且简单介</description>
+    </item>
+    
+    <item>
+      <title>client-go 之 WorkQueue 篇</title>
+      <link>https://luffyao.github.io/2020/09/clientgoworkqueue/</link>
+      <pubDate>Sun, 06 Sep 2020 17:24:55 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/09/clientgoworkqueue/</guid>
+      <description>client-go 源码学习系列： client-go 之概述篇 client-go 之 Informer 篇 client-go 之 WorkQueue 篇 前言 在第一篇的概述中，我给大家展示过一张来自官方的 Informer 的处理流程图，在第二篇中，主要和大家介绍并分析</description>
+    </item>
+    
+    <item>
+      <title>client-go 之概述篇</title>
+      <link>https://luffyao.github.io/2020/08/clientgooverall/</link>
+      <pubDate>Fri, 07 Aug 2020 21:28:37 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/08/clientgooverall/</guid>
+      <description>client-go 源码学习系列： client-go 之概述篇 client-go 之 Informer 篇 client-go 之 WorkQueue 篇 前言 目前在云原生社区的 Kubernetes 源码研习社中和广大学友们共同学习郑东旭大佬的 kubernetes 源码剖析 这本书。当前正在开展</description>
+    </item>
+    
+    <item>
+      <title>本地 ubuntu18.04 VM 安装 k8s</title>
+      <link>https://luffyao.github.io/2020/07/vminstallk8s/</link>
+      <pubDate>Sat, 25 Jul 2020 15:36:42 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/07/vminstallk8s/</guid>
+      <description>安装步骤 安装虚拟机 安装至少需要安装两个 ubuntu 虚拟机，根据个人需求，和电脑配置，这里我是两个虚拟机，一个 master ，一个 node 。每个虚拟机 2 CPU，4G 内存。</description>
+    </item>
+    
+    <item>
+      <title>controller-runtime 实现准入 webhook</title>
+      <link>https://luffyao.github.io/2020/05/admission-controller-webhook/</link>
+      <pubDate>Sun, 17 May 2020 13:04:02 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/05/admission-controller-webhook/</guid>
+      <description>前言 上一篇 client-go 实现准入 webhook 讲的是直接用 client-go 去编写 webhook server. 这篇将讲述如何使用 controller-runtime 快速的写一个 webhook server. 编写 webhook server 这次是直接用 controller-runtime 的 webhook, 自己写一个 handle 处理逻辑就好了，所以</description>
+    </item>
+    
+    <item>
+      <title>client-go 实现准入 webhook</title>
+      <link>https://luffyao.github.io/2020/05/k8s-webhook-admission-control/</link>
+      <pubDate>Wed, 13 May 2020 14:42:35 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/05/k8s-webhook-admission-control/</guid>
+      <description>什么是准入 webhook 准入 webhooks 是一个接收 admission 请求并对其做些处理的 HTTP 回调。你可以定义两种准入 webhook,validating admission webhook and mutating admission webhook。mutating admission webhook 首先被调用，然后</description>
+    </item>
+    
+    <item>
+      <title>使用 operator-sdk 生成一个CRD</title>
+      <link>https://luffyao.github.io/2020/04/using-operator-sdk-to-generate-k8s-crd/</link>
+      <pubDate>Thu, 02 Apr 2020 09:11:11 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/04/using-operator-sdk-to-generate-k8s-crd/</guid>
+      <description>What is CRD The CustomResourceDefinition API resource allows you to define custom resources. Defining a CRD object creates a new custom resource with a name and schema that you specify. The Kubernetes API serves and handles the storage of your custom resource. The name of a CRD object must be a valid DNS subdomain name. more detailed info please refer to CRD definition What is operator-sdk The SDK provides the</description>
+    </item>
+    
+  </channel>
+</rss>

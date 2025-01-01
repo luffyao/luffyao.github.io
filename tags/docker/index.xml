@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Docker on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/docker/</link>
+    <description>Recent content in Docker on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Fri, 03 Sep 2021 09:20:23 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/docker/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>记一次 Kubectl 删除 Pod 的过程分析</title>
+      <link>https://luffyao.github.io/2021/09/what-happened-when-delete-pod/</link>
+      <pubDate>Fri, 03 Sep 2021 09:20:23 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2021/09/what-happened-when-delete-pod/</guid>
+      <description>前言 当你输入 kubectl delete pods podname 时，K8s 到底是如何将你的 pod 杀死的呢。这篇文章将从源码的角度，带你一起分析这个过程。 分析 当我们调用 Kubectl delete pods 命令的时候，ku</description>
+    </item>
+    
+    <item>
+      <title>如何在 pod 中做 golang 的 profiling</title>
+      <link>https://luffyao.github.io/2020/03/how_to_profiling_go_in_pod/</link>
+      <pubDate>Sat, 07 Mar 2020 12:53:42 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/03/how_to_profiling_go_in_pod/</guid>
+      <description>前言 相比于 C++ 在 pod 中做 profiling， 那么对于云原生的 golang 来说就太方便了。下面我将讲述下我做 golang profiling 的具体过程和步骤。由于我们是基于 Restful 接口的系统</description>
+    </item>
+    
+    <item>
+      <title>如何抓取 pod 中的 container 的 Tcpdump</title>
+      <link>https://luffyao.github.io/2019/12/how_to_grab_tcpdump_in_container/</link>
+      <pubDate>Sat, 07 Dec 2019 18:44:49 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/how_to_grab_tcpdump_in_container/</guid>
+      <description>前言 一般情况下，想要抓取 pod 中的某个 container 的 tcpdump，直接 kubectl exec 进入那个 container，然后就可以抓取了。但是如果当你的 image 没有安装 bash 等 shell t</description>
+    </item>
+    
+    <item>
+      <title>如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug</title>
+      <link>https://luffyao.github.io/2019/12/how-_to_copy_coredump_in_the_container/</link>
+      <pubDate>Mon, 02 Dec 2019 21:35:01 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/how-_to_copy_coredump_in_the_container/</guid>
+      <description>前言 为什么会记录这篇文章呢，是因为在工作中，遇到了这个问题，由于我们这个是 C++写的代码，crash tracing 并没有 golang 好，所以代码 crash 在 pod 中的 container 里面，</description>
+    </item>
+    
+    <item>
+      <title>Ubuntu 18.04 上安装 Docker CE</title>
+      <link>https://luffyao.github.io/2019/12/how-to-install-docker-ce-in-the-ubuntu-18-04/</link>
+      <pubDate>Sun, 01 Dec 2019 19:39:15 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/how-to-install-docker-ce-in-the-ubuntu-18-04/</guid>
+      <description>安装 官方网站上选择一个合适的安装方法。请参考 官方文档。 注意 Maybe you will appear docker-ce-cli not found issue,when using following command which written by docker formal docs to install docker ce. you can refernce my solution to solve it. 使用 Docker 官方文档编写的以下</description>
+    </item>
+    
+  </channel>
+</rss>

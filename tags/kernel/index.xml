@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>kernel on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/kernel/</link>
+    <description>Recent content in kernel on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Thu, 29 Aug 2024 00:00:00 +0000</lastBuildDate><atom:link href="https://luffyao.github.io/tags/kernel/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>手动编译并升级 linux 内核</title>
+      <link>https://luffyao.github.io/2024/08/make_linux_kernel/</link>
+      <pubDate>Thu, 29 Aug 2024 00:00:00 +0000</pubDate>
+      
+      <guid>https://luffyao.github.io/2024/08/make_linux_kernel/</guid>
+      <description>下载源码 官方网站选择合适版本下载源码 kernel org。 并解压 tar -xvf linux-6.10.6.tar.xz cd linux-6.10.6 安装依赖包 sudo apt-get update sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev 配置内核参数 使用当前系统的默认配置参数： cp /boot/config-$(uname</description>
+    </item>
+    
+  </channel>
+</rss>

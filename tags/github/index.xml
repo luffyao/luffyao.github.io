@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>github on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/github/</link>
+    <description>Recent content in github on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sun, 01 Dec 2019 15:39:15 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/github/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>github 上将源 repo 提交更新到 fork 的 repo</title>
+      <link>https://luffyao.github.io/2019/12/update_forked_repo_from_original_repo_in_github/</link>
+      <pubDate>Sun, 01 Dec 2019 15:39:15 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/update_forked_repo_from_original_repo_in_github/</guid>
+      <description>前言 在 github 上 一般我们都是将别人的 repo fork 到自己的 github repo。 然后阅读，修改 甚至是 contribution。所以同步源 repo 的 commit 尤为重要。因为你要始终保</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="用 Perf 给 C&#43;&#43; 代码做 Profiling" />
+    <meta property="og:title" content="用 Perf 给 C&#43;&#43; 代码做 Profiling" />
+    <meta property="twitter:title" content="用 Perf 给 C&#43;&#43; 代码做 Profiling" />
+    
+
+    
+    <meta name="description" content="如何用 Linux 系统自带的 Perf 给 C&#43;&#43;代码做性能分析。">
+    <meta property="og:description" content="如何用 Linux 系统自带的 Perf 给 C&#43;&#43;代码做性能分析。" />
+    <meta property="twitter:description" content="如何用 Linux 系统自带的 Perf 给 C&#43;&#43;代码做性能分析。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="Profiling,Perf,C&#43;&#43;,性能分析">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>用 Perf 给 C&#43;&#43; 代码做 Profiling | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2019/12/profiling-c-with-perf-in-the-linux-env/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/profiling" title="Profiling">
+                            Profiling
+                        </a>
+                        
+                    </div>
+                    <h1>用 Perf 给 C&#43;&#43; 代码做 Profiling</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Sunday, December 1, 2019
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="前言">前言</h2>
+<p>该篇主要是记录如何使用 Linux 自带的 Pref 工具看 C++程序的性能问题。该篇只是简单的记录如何收集性能数据，具体分析这里不做描述。</p>
+<h2 id="安装-perf">安装 perf</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo apt-get install linux-tools-common
+sudo apt-get install linux-tools-<span style="color:#ff79c6">$(</span>uname -r<span style="color:#ff79c6">)</span> linux-cloud-tools-<span style="color:#ff79c6">$(</span>uname -r<span style="color:#ff79c6">)</span>
+</code></pre></div><h2 id="附加设置">附加设置</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo sysctl kernel.perf_event_paranoid<span style="color:#ff79c6">=</span>-1
+sudo sysctl kernel.kptr_restrict<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>
+</code></pre></div><h2 id="容器中安装-perf">容器中安装 Perf</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-dockerfile" data-lang="dockerfile"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> ubuntu:16.04</span>
+
+<span style="color:#ff79c6">RUN</span> apt-get update <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>      apt-get -y install sudo 
+<span style="color:#ff79c6">RUN</span> apt-get --assume-yes install linux-tools-generic
+<span style="color:#ff79c6">RUN</span> apt-get --assume-yes install linux-tools-4.4.0-116-generic linux-cloud-tools-4.4.0-116-generic linux-tools-generic linux-cloud-tools-generic
+
+<span style="color:#ff79c6">RUN</span> sudo sysctl kernel.perf_event_paranoid<span style="color:#ff79c6">=</span>-1
+<span style="color:#ff79c6">RUN</span> sudo sysctl kernel.kptr_restrict<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>
+
+<span style="color:#ff79c6">ARG</span>             BUILD_TYPE
+<span style="color:#ff79c6">ADD</span>             <span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">BUILD_TYPE</span><span style="color:#f1fa8c">}</span>/bin/application /bin/
+<span style="color:#ff79c6">ENTRYPOINT</span>      [<span style="color:#f1fa8c">&#34;/bin/application&#34;</span>]
+</code></pre></div><h2 id="记录-perf-示例">记录 perf 示例</h2>
+<h3 id="选项-1-启动应用程序后记录-perf">选项 1: 启动应用程序后记录 perf</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./application_name
+
+perf record -g -s -p <span style="color:#f1fa8c">`</span>ps -ef | grep application_name | grep -v grep | awk <span style="color:#f1fa8c">&#39;{print $2}&#39;</span><span style="color:#f1fa8c">`</span>
+</code></pre></div><h3 id="选项-2-启动应用程序时记录-perf">选项 2: 启动应用程序时记录 perf</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">perf record -g -s ./application_name
+</code></pre></div><h2 id="运行-load-测试-h2load">运行 load 测试 (h2load)</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">h2load -D <span style="color:#bd93f9">2</span> -c <span style="color:#bd93f9">10</span> -m <span style="color:#bd93f9">10</span> -H<span style="color:#f1fa8c">&#39;:method:POST&#39;</span> -H<span style="color:#f1fa8c">&#39;content-type:application/json&#39;</span> your_restful_uri -d data.txt
+</code></pre></div><h2 id="检查报告-将存储在一个名为-perfldata-的文件">检查报告 （将存储在一个名为 perfl.data 的文件）</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">perf report -d applicationname -g graph,0.05,caller,function
+or 
+perf report
+</code></pre></div><h2 id="总结">总结</h2>
+<p>这里就是简单的记录下如何安装 Perf 和如何收集 perf 数据，对于如何分析，还得根据自己的 C++程序，然后对收集到的数据，做具体分析。</p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2019/12/how-to-install-docker-ce-in-the-ubuntu-18-04/" data-toggle="tooltip" data-placement="top" title="Ubuntu 18.04 上安装 Docker CE">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2019/12/how-_to_copy_coredump_in_the_container/" data-toggle="tooltip" data-placement="top" title="如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

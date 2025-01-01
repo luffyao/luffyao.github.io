@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="基于 kafka-go 的微服务的 Stop the World 分析" />
+    <meta property="og:title" content="基于 kafka-go 的微服务的 Stop the World 分析" />
+    <meta property="twitter:title" content="基于 kafka-go 的微服务的 Stop the World 分析" />
+    
+
+    
+    <meta name="description" content="在稳定性测试下，服务出现 7-8s 的 STW 的情况的分析">
+    <meta property="og:description" content="在稳定性测试下，服务出现 7-8s 的 STW 的情况的分析" />
+    <meta property="twitter:description" content="在稳定性测试下，服务出现 7-8s 的 STW 的情况的分析" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="kafka-go,稳定性测试">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>基于 kafka-go 的微服务的 Stop the World 分析 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2022/05/kafka-go_analysis/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/kafka" title="Kafka">
+                            Kafka
+                        </a>
+                        
+                    </div>
+                    <h1>基于 kafka-go 的微服务的 Stop the World 分析</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Sunday, May 1, 2022
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="问题描述">问题描述</h2>
+<p>基于 kafka 框架的两个处理服务的实例，订阅一个 topic，并且有 20 个 partition，在 traffic 正常发送的情况下，手动杀死一个实例，测试是否对 traffic 有影响。</p>
+<p>事实上，在 100CPS 的稳定性测试下，该服务最大出现 7-8s 的 STW 的情况。</p>
+<h2 id="分析">分析</h2>
+<p>在该测试案例下，杀一个实例，并启动一个新的实例的过程，会触发 consumer group 的 rebalancing 操作，在杀死一个实例的过程中，该实例会 leave 这个 consumer group，当新的实例被创建起来时，将会加入这个 consumer group。</p>
+<p>根据 kafka 的实现，旧版本是在这个 rebalancing 的过程中是完全的 STW 的，而在 2.4 的新版本中，为了尽可能的避免 STW，引入了 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol">KIP-429 Incremental Rebalance Protocol</a>，但该协议是需要 client 实现。</p>
+<p>而我们使用的是 <a href="https://github.com/segmentio/kafka-go">kafka-go</a> 库中并不支持最新的协议，所以目前的实现在 rebalancing 的过程中，仍是完全的 STW 的。</p>
+<p>但是考虑到在测试案例的过程中，虽然会有两次的 rebalancing 的过程，但是导致 7-8s 的 STW 仍是奇怪的行为，因为即使网络的原因也不会导致如此长的延迟。于是通过阅读 kafka-go 的源代码发现，该等待时间是由于使用了库中默认设置的 MaxWait（默认 10s) 配置，该参数将会应用到 Fetch 请求中，其作用是在从 kafka 中 fetch 消息到来的最大等待时间，也就是说如果该 partition 上没有新的数据到来，将会等待的最大时间，而根据 Kafka 官网定义 <a href="https://kafka.apache.org/documentation/#fetch.max.wait.ms">fetch.max.wait.ms</a>，该值默认为 500ms，</p>
+<p>而为什么该值的设置导致我们 7-8s 的 STW 的情况，则是，该开源库的实现是基于旧的 rebalancing 的协议实现，所以在 rebalancing 的过程中，它将会 停止所有的处理 goroutine，然后等待这些 goroutine 的结束，再进行下一轮的 generation 的计算。</p>
+<p>所以在这个过程中，当一个 consumer group 中的一个 consumer 通过 hearbeat 请求 接收到 rebalancing 的请求时，将会通过关闭 channel 的方式 告知所有的处理 goroutine 进行关闭，等待所有 goroutine 全部结束，再进行重新 joingroup 的请求，进行 rebalancing 处理，但是由于我们使用默认的 MaxWait，导致当有些 partition 上没有消息的情况下，该处理 goroutine 将会等待 MaxWait 时间，才会从 Fetch 请求中退出，再处理 channel 关闭的信号，进行关闭 routine。 所以由于某些 Fetch 的超长等待，导致这一次的处理 routine 不能完全关闭，从而阻塞了下一次 rebalancing 的过程，导致了长时间 STW。</p>
+<p>下面从源码角度分析：</p>
+<p>当我们调用 NewReader 时，将会调用 NewConsumerGroup 创建 consumergroup 实例，并传入 Reader 实例的 run 函数，</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewReader</span>(config ReaderConfig) <span style="color:#ff79c6">*</span>Reader {
+    r <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>Reader{
+    }
+
+    <span style="color:#ff79c6">if</span> r.<span style="color:#50fa7b">useConsumerGroup</span>() {
+        r.done = <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{})
+        cg, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewConsumerGroup</span>(ConsumerGroupConfig{
+        })
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#8be9fd;font-style:italic">panic</span>(err)
+        }
+        <span style="color:#ff79c6">go</span> r.<span style="color:#50fa7b">run</span>(cg)
+    }
+
+    <span style="color:#ff79c6">return</span> r
+}
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewConsumerGroup</span>(config ConsumerGroupConfig) (<span style="color:#ff79c6">*</span>ConsumerGroup, <span style="color:#8be9fd">error</span>) {
+    cg <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>ConsumerGroup{
+        next:   <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Generation),
+        done:   <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}),
+    }
+    cg.wg.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">1</span>)
+    <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+        cg.<span style="color:#50fa7b">run</span>()
+        cg.wg.<span style="color:#50fa7b">Done</span>()
+    }()
+    <span style="color:#ff79c6">return</span> cg, <span style="color:#ff79c6">nil</span>
+}
+
+</code></pre></div><p>我们可以看到 Reader 的 run 函数中，无限循环的从 cg.Next 中取出 gen 进行处理，并只有当 stctx error 的时候才会退出，</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reader) <span style="color:#50fa7b">run</span>(cg <span style="color:#ff79c6">*</span>ConsumerGroup) {
+    <span style="color:#ff79c6">for</span> {
+        gen, err <span style="color:#ff79c6">:=</span> cg.<span style="color:#50fa7b">Next</span>(r.stctx)
+        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">==</span> r.stctx.<span style="color:#50fa7b">Err</span>() {
+                <span style="color:#ff79c6">return</span>
+            }
+        }
+        r.<span style="color:#50fa7b">subscribe</span>(gen.Assignments[r.config.Topic])
+
+        gen.<span style="color:#50fa7b">Start</span>(<span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context) {
+            r.<span style="color:#50fa7b">commitLoop</span>(ctx, gen)
+        })
+        gen.<span style="color:#50fa7b">Start</span>(<span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context) {
+            <span style="color:#6272a4">// wait for the generation to end and then unsubscribe.
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">select</span> {
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+                <span style="color:#6272a4">// continue to next generation
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>r.stctx.<span style="color:#50fa7b">Done</span>():
+                <span style="color:#6272a4">// this will be the last loop because the reader is closed.
+</span><span style="color:#6272a4"></span>            }
+            r.<span style="color:#50fa7b">unsubscribe</span>()
+        })
+    }
+}
+</code></pre></div><p>首先看看小小的 gen.Start 函数， 这里将会传入一个函数，并通过 waitgroup 进行同步操作，也就是说一个 gen 的实例调用的 Start 函数，将会是同步操作；此外当传入函数执行完毕后，会主动关闭 gen.done channel。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (g <span style="color:#ff79c6">*</span>Generation) <span style="color:#50fa7b">Start</span>(fn <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context)) {
+    g.wg.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">1</span>)
+    <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+        <span style="color:#50fa7b">fn</span>(genCtx{g})
+        <span style="color:#6272a4">// shut down the generation as soon as one function exits.  this is
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// different from close() in that it doesn&#39;t wait on the wg.
+</span><span style="color:#6272a4"></span>        g.once.<span style="color:#50fa7b">Do</span>(<span style="color:#8be9fd;font-style:italic">func</span>() {
+            <span style="color:#8be9fd;font-style:italic">close</span>(g.done)
+        })
+        g.wg.<span style="color:#50fa7b">Done</span>()
+    }()
+}
+
+</code></pre></div><p>在run函数中，通过调用 r.subscribe() -&gt; Reader.start() 中对于每一个 partition 都开启一个 reader.run 进行处理。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reader) <span style="color:#50fa7b">start</span>(offsetsByPartition <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">int</span>]<span style="color:#8be9fd">int64</span>) {
+    r.join.<span style="color:#50fa7b">Add</span>(<span style="color:#8be9fd;font-style:italic">len</span>(offsetsByPartition))
+    <span style="color:#ff79c6">for</span> partition, offset <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> offsetsByPartition {
+        <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context, partition <span style="color:#8be9fd">int</span>, offset <span style="color:#8be9fd">int64</span>, join <span style="color:#ff79c6">*</span>sync.WaitGroup) {
+            <span style="color:#ff79c6">defer</span> join.<span style="color:#50fa7b">Done</span>()
+
+            (<span style="color:#ff79c6">&amp;</span>reader{
+                maxWait:         r.config.MaxWait,
+            }).<span style="color:#50fa7b">run</span>(ctx, offset)
+        }(ctx, partition, offset, <span style="color:#ff79c6">&amp;</span>r.join)
+    }
+}
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>reader) <span style="color:#50fa7b">run</span>(ctx context.Context, offset <span style="color:#8be9fd">int64</span>) {
+    <span style="color:#ff79c6">for</span> attempt <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; <span style="color:#ff79c6">true</span>; attempt<span style="color:#ff79c6">++</span> {
+        <span style="color:#ff79c6">if</span> attempt <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span> {
+            <span style="color:#ff79c6">if</span> !<span style="color:#50fa7b">sleep</span>(ctx, <span style="color:#50fa7b">backoff</span>(attempt, r.backoffDelayMin, r.backoffDelayMax)) {
+                <span style="color:#ff79c6">return</span>
+            }
+        }
+
+        conn, start, err <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">initialize</span>(ctx, offset)
+
+    readLoop:
+        <span style="color:#ff79c6">for</span> {
+            <span style="color:#ff79c6">if</span> !<span style="color:#50fa7b">sleep</span>(ctx, <span style="color:#50fa7b">backoff</span>(errcount, r.backoffDelayMin, r.backoffDelayMax)) {
+                conn.<span style="color:#50fa7b">Close</span>()
+                <span style="color:#ff79c6">return</span>
+            }
+
+            <span style="color:#ff79c6">switch</span> offset, err = r.<span style="color:#50fa7b">read</span>(ctx, offset, conn); err {
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">nil</span>:
+                errcount = <span style="color:#bd93f9">0</span>
+            <span style="color:#ff79c6">case</span> io.EOF:
+            <span style="color:#ff79c6">case</span> context.Canceled:
+                conn.<span style="color:#50fa7b">Close</span>()
+                <span style="color:#ff79c6">return</span>
+
+            <span style="color:#ff79c6">case</span> errUnknownCodec:
+                <span style="color:#ff79c6">break</span> readLoop
+
+            <span style="color:#ff79c6">default</span>:
+            }
+        }
+    }
+}
+</code></pre></div><p>我们在 reader.run 中通过 initialize 初始化连接，并通过 read 去读取消息，直到一些主要的错误，或者 cancel 或者 done 的信号才会退出。</p>
+<p>下面我们看下 read 函数中，设置了 maxWait 作为 fetch 的 deadline，所以如分析所述，如果分区上没有消息的情况下，将会在该函数中等待 maxWait 才会退出。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>reader) <span style="color:#50fa7b">read</span>(ctx context.Context, offset <span style="color:#8be9fd">int64</span>, conn <span style="color:#ff79c6">*</span>Conn) (<span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>) {
+
+    t0 <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
+    conn.<span style="color:#50fa7b">SetReadDeadline</span>(t0.<span style="color:#50fa7b">Add</span>(r.maxWait))
+
+    batch <span style="color:#ff79c6">:=</span> conn.<span style="color:#50fa7b">ReadBatchWith</span>(ReadBatchConfig{
+        MinBytes:       r.minBytes,
+        MaxBytes:       r.maxBytes,
+        IsolationLevel: r.isolationLevel,
+    })
+    highWaterMark <span style="color:#ff79c6">:=</span> batch.<span style="color:#50fa7b">HighWaterMark</span>()
+
+    <span style="color:#8be9fd;font-style:italic">const</span> safetyTimeout = <span style="color:#bd93f9">10</span> <span style="color:#ff79c6">*</span> time.Second
+    deadline <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">Add</span>(safetyTimeout)
+    conn.<span style="color:#50fa7b">SetReadDeadline</span>(deadline)
+
+    <span style="color:#ff79c6">for</span> {
+        <span style="color:#ff79c6">if</span> now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>(); deadline.<span style="color:#50fa7b">Sub</span>(now) &lt; (safetyTimeout <span style="color:#ff79c6">/</span> <span style="color:#bd93f9">2</span>) {
+            deadline = now.<span style="color:#50fa7b">Add</span>(safetyTimeout)
+            conn.<span style="color:#50fa7b">SetReadDeadline</span>(deadline)
+        }
+
+        <span style="color:#ff79c6">if</span> msg, err = batch.<span style="color:#50fa7b">ReadMessage</span>(); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            batch.<span style="color:#50fa7b">Close</span>()
+            <span style="color:#ff79c6">break</span>
+        }
+        <span style="color:#ff79c6">if</span> err = r.<span style="color:#50fa7b">sendMessage</span>(ctx, msg, highWaterMark); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            batch.<span style="color:#50fa7b">Close</span>()
+            <span style="color:#ff79c6">break</span>
+        }
+
+    }
+
+    conn.<span style="color:#50fa7b">SetReadDeadline</span>(time.Time{})
+
+    <span style="color:#ff79c6">return</span> offset, err
+}
+</code></pre></div><p>我们再回过头来看看 Reader 的 run 中的 cg.Next 函数的逻辑，则是通过阻塞式的读取 cg.next，所以当没有 next 的时候，上面的 run 函数将会一直阻塞在该函数上。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (cg <span style="color:#ff79c6">*</span>ConsumerGroup) <span style="color:#50fa7b">Next</span>(ctx context.Context) (<span style="color:#ff79c6">*</span>Generation, <span style="color:#8be9fd">error</span>) {
+    <span style="color:#ff79c6">select</span> {
+    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, ctx.<span style="color:#50fa7b">Err</span>()
+    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>cg.done:
+        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, ErrGroupClosed
+    <span style="color:#ff79c6">case</span> err <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>cg.errs:
+        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+    <span style="color:#ff79c6">case</span> next <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>cg.next:
+        <span style="color:#ff79c6">return</span> next, <span style="color:#ff79c6">nil</span>
+    }
+}
+</code></pre></div><p>下面来看看是如何向该 next 中输入数据的，我们从 consumergroup 中的 run 函数看起，我们可以看到仍是一个死循环的处理消息，首先从 cg.nextGeneration 中获取 memberID，</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (cg <span style="color:#ff79c6">*</span>ConsumerGroup) <span style="color:#50fa7b">run</span>() {
+    <span style="color:#ff79c6">for</span> {
+        memberID, err = cg.<span style="color:#50fa7b">nextGeneration</span>(memberID)
+
+        <span style="color:#6272a4">// backoff will be set if this go routine should sleep before continuing
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// to the next generation.  it will be non-nil in the case of an error
+</span><span style="color:#6272a4"></span>        <span style="color:#6272a4">// joining or syncing the group.
+</span><span style="color:#6272a4"></span>        <span style="color:#8be9fd;font-style:italic">var</span> backoff <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> time.Time
+        <span style="color:#ff79c6">switch</span> err {
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">nil</span>:
+            <span style="color:#6272a4">// no error...the previous generation finished normally.
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">continue</span>
+        <span style="color:#ff79c6">case</span> ErrGroupClosed:
+            <span style="color:#6272a4">// the CG has been closed...leave the group and exit loop.
+</span><span style="color:#6272a4"></span>            _ = cg.<span style="color:#50fa7b">leaveGroup</span>(memberID)
+            <span style="color:#ff79c6">return</span>
+        <span style="color:#ff79c6">case</span> RebalanceInProgress:
+        <span style="color:#ff79c6">default</span>:
+            <span style="color:#6272a4">// leave the group and report the error if we had gotten far
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// enough so as to have a member ID.  also clear the member id
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// so we don&#39;t attempt to use it again.  in order to avoid
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// a tight error loop, backoff before the next attempt to join
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// the group.
+</span><span style="color:#6272a4"></span>            _ = cg.<span style="color:#50fa7b">leaveGroup</span>(memberID)
+            memberID = <span style="color:#f1fa8c">&#34;&#34;</span>
+            backoff = time.<span style="color:#50fa7b">After</span>(cg.config.JoinGroupBackoff)
+        }
+    }
+}
+</code></pre></div><p>下面看 nextGeneration 函数中，主要则是做 rebalancing 的处理，首先找到 coordinator，然后发送 joinGroup 请求，再 syncGroup，并 fetchOffsets 及开启 heartbeat 循环，并生成 generation 一个实例，发送到 cg.next channel 中。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (cg <span style="color:#ff79c6">*</span>ConsumerGroup) <span style="color:#50fa7b">nextGeneration</span>(memberID <span style="color:#8be9fd">string</span>) (<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+    conn, err <span style="color:#ff79c6">:=</span> cg.<span style="color:#50fa7b">coordinator</span>()
+
+    <span style="color:#6272a4">// join group.  this will join the group and prepare assignments if our
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// consumer is elected leader.  it may also change or assign the member ID.
+</span><span style="color:#6272a4"></span>    memberID, generationID, groupAssignments, err = cg.<span style="color:#50fa7b">joinGroup</span>(conn, memberID)
+
+    <span style="color:#6272a4">// sync group
+</span><span style="color:#6272a4"></span>    assignments, err = cg.<span style="color:#50fa7b">syncGroup</span>(conn, memberID, generationID, groupAssignments)
+
+    <span style="color:#6272a4">// fetch initial offsets.
+</span><span style="color:#6272a4"></span>    offsets, err = cg.<span style="color:#50fa7b">fetchOffsets</span>(conn, assignments)
+
+    <span style="color:#6272a4">// create the generation.
+</span><span style="color:#6272a4"></span>    gen <span style="color:#ff79c6">:=</span> Generation{
+        ID:              generationID,
+        GroupID:         cg.config.ID,
+        MemberID:        memberID,
+        Assignments:     cg.<span style="color:#50fa7b">makeAssignments</span>(assignments, offsets),
+        conn:            conn,
+        done:            <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}),
+    }
+
+    <span style="color:#6272a4">// spawn all of the go routines required to facilitate this generation.  if
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// any of these functions exit, then the generation is determined to be
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// complete.
+</span><span style="color:#6272a4"></span>    gen.<span style="color:#50fa7b">heartbeatLoop</span>(cg.config.HeartbeatInterval)
+    <span style="color:#ff79c6">if</span> cg.config.WatchPartitionChanges {
+        <span style="color:#ff79c6">for</span> _, topic <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> cg.config.Topics {
+            gen.<span style="color:#50fa7b">partitionWatcher</span>(cg.config.PartitionWatchInterval, topic)
+        }
+    }
+
+    <span style="color:#6272a4">// make this generation available for retrieval.  if the CG is closed before
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// we can send it on the channel, exit.  that case is required b/c the next
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// channel is unbuffered.  if the caller to Next has already bailed because
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// it&#39;s own teardown logic has been invoked, this would deadlock otherwise.
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">select</span> {
+    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>cg.done:
+        gen.<span style="color:#8be9fd;font-style:italic">close</span>()
+        <span style="color:#ff79c6">return</span> memberID, ErrGroupClosed <span style="color:#6272a4">// ErrGroupClosed will trigger leave logic.
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">case</span> cg.next <span style="color:#ff79c6">&lt;-</span> <span style="color:#ff79c6">&amp;</span>gen:
+    }
+
+    <span style="color:#6272a4">// wait for generation to complete.  if the CG is closed before the
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// generation is finished, exit and leave the group.
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">select</span> {
+    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>cg.done:
+        gen.<span style="color:#8be9fd;font-style:italic">close</span>()
+        <span style="color:#ff79c6">return</span> memberID, ErrGroupClosed <span style="color:#6272a4">// ErrGroupClosed will trigger leave logic.
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>gen.done:
+        <span style="color:#6272a4">// before continuing onward.
+</span><span style="color:#6272a4"></span>        gen.<span style="color:#8be9fd;font-style:italic">close</span>()
+        <span style="color:#ff79c6">return</span> memberID, <span style="color:#ff79c6">nil</span>
+    }
+}
+</code></pre></div><p>所以当一个 consumer 正常的加入 consumer group 后，则首先会阻塞在 Reader.run 中的 cg.Next(r.stctx) 中，等待下一次的 generation 的生成。</p>
+<p>同样另一 routine 将会阻塞在 ConsumerGroup 的 run 函数中的 cg.nextGeneration(memberID) 中，等待 cg.done 或者 gen.done 的信号，然后执行 gen.close 关闭旧的 generation。</p>
+<p>我们看下 gen.close 函数，这里会调用 waitgroup 的 Wait 等待所有的通过调用上面描述的 gen.Start 函数的 routine 结束。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (g <span style="color:#ff79c6">*</span>Generation) <span style="color:#8be9fd;font-style:italic">close</span>() {
+    g.once.<span style="color:#50fa7b">Do</span>(<span style="color:#8be9fd;font-style:italic">func</span>() {
+        <span style="color:#8be9fd;font-style:italic">close</span>(g.done)
+    })
+    g.wg.<span style="color:#50fa7b">Wait</span>()
+}
+</code></pre></div><p>再看看 nextGeneration 函数中 gen.heartbeatLoop(cg.config.HeartbeatInterval) 函数，则是当 heartbeat 请求返回失败的情况下，将会退出该程序。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in consumergroup.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (g <span style="color:#ff79c6">*</span>Generation) <span style="color:#50fa7b">heartbeatLoop</span>(interval time.Duration) {
+    g.<span style="color:#50fa7b">Start</span>(<span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context) {
+        ticker <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">NewTicker</span>(interval)
+        <span style="color:#ff79c6">defer</span> ticker.<span style="color:#50fa7b">Stop</span>()
+
+        <span style="color:#ff79c6">for</span> {
+            <span style="color:#ff79c6">select</span> {
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+                <span style="color:#ff79c6">return</span>
+            <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ticker.C:
+                _, err <span style="color:#ff79c6">:=</span> g.conn.<span style="color:#50fa7b">heartbeat</span>(heartbeatRequestV0{
+                    GroupID:      g.GroupID,
+                    GenerationID: g.ID,
+                    MemberID:     g.MemberID,
+                })
+                <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                    <span style="color:#ff79c6">return</span>
+                }
+            }
+        }
+    })
+}
+</code></pre></div><p>结合本问题分析，及当 rebalancing in progress 时，heartbeat 请求将会返回错误时，则此时该 gen.Start 函数中将会主动 close gen.done。</p>
+<p>根据上面分析，首先 阻塞的 nextGeneration 函数将会收到该信号，从而调用 gen.close()，然后调用 wg.Wait 等待相应的 routine 退出，当所有的 routine 退出后，则会返回该函数，进入 consumergroup 的 run 函数进行处理。</p>
+<p>而这里由于对于每一个 generation，我们调动了三次 Start 函数，分别为 r.commitLoop, r.unsubscribe 和 g.conn.heartbeat，而对于我们处理消息的 routine 则是通过 r.unsubscribe 进行取消通知，并等待所有 routine 结束才退出。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">//in reader.go
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (r <span style="color:#ff79c6">*</span>Reader) <span style="color:#50fa7b">unsubscribe</span>() {
+    r.<span style="color:#50fa7b">cancel</span>()
+    r.join.<span style="color:#50fa7b">Wait</span>()
+}
+</code></pre></div><p>因此 从源码角度上，我们可以看出当出现上述情况下，由于某一个 fetch 请求的阻塞，都会影响到整个 rebalancing 的处理。</p>
+<p>所以对于这个问题的根本原因在于使用了默认的 MaxWait 参数导致。</p>
+<h2 id="总结">总结</h2>
+<p>配置 MaxWait 参数为一个合适的值，参考 <a href="https://github.com/edenhill/librdkafka">librdkafka</a> 可设置为默认值 500ms 或 <a href="https://github.com/Shopify/sarama">sarama</a> 为 250ms。</p>
+<h2 id="参考">参考</h2>
+<p>Kafka protocol : <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol">KIP-429 Incremental Rebalance Protocol</a></p>
+<p>golang 客户端实现 : <a href="https://github.com/segmentio/kafka-go">kafka-go</a> , <a href="https://github.com/Shopify/sarama">sarama</a></p>
+<p>c/C++ 客户端实现 : <a href="https://github.com/edenhill/librdkafka">librdkafka</a></p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2021/09/what-happened-when-delete-pod/" data-toggle="tooltip" data-placement="top" title="记一次 Kubectl 删除 Pod 的过程分析">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2023/05/istio_lb/" data-toggle="tooltip" data-placement="top" title="istio round robin 负载不均衡分析">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

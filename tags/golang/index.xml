@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>golang on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/golang/</link>
+    <description>Recent content in golang on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Tue, 17 Aug 2021 09:23:03 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/golang/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Golang 内存优化</title>
+      <link>https://luffyao.github.io/2021/08/golang-memory-optimize/</link>
+      <pubDate>Tue, 17 Aug 2021 09:23:03 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2021/08/golang-memory-optimize/</guid>
+      <description>前言 最近接到几个关于在压力测试下，pod 中的容器被重启的问题。在查看了下 pod 的信息及使用 dmesg 命令到 node 节点上查看了一下系统日志，发现都是我们的 golang 容</description>
+    </item>
+    
+    <item>
+      <title>为什么会出现随机 504，408 错误代码？（一）</title>
+      <link>https://luffyao.github.io/2021/06/online_response_408_504_analysis_1/</link>
+      <pubDate>Thu, 03 Jun 2021 14:35:52 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2021/06/online_response_408_504_analysis_1/</guid>
+      <description>为什么会出现随机 504，408 错误代码？（一） 为什么会出现随机 504，408 错误代码？（二） 问题描述 这是一个我们系统测试人员对我们的微服务请</description>
+    </item>
+    
+    <item>
+      <title>write on closed buffer 错误分析</title>
+      <link>https://luffyao.github.io/2020/09/http2_write_on_closed_buffer_error/</link>
+      <pubDate>Sat, 26 Sep 2020 09:38:23 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/09/http2_write_on_closed_buffer_error/</guid>
+      <description>问题描述 这几天系统测试的同事给我们报了个奇怪的问题，就是在压力测试下，一个服务的 client 端在处理消息的时候会出现 write on closed buffer 的错误。虽然这个问题较为奇</description>
+    </item>
+    
+  </channel>
+</rss>

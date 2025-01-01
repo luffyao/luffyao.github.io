@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug" />
+    <meta property="og:title" content="如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug" />
+    <meta property="twitter:title" content="如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug" />
+    
+
+    
+    <meta name="description" content="简单介绍如何在 container 里面生成 coredump 文件并拷贝出来，然后使用 GDB 去 debug。">
+    <meta property="og:description" content="简单介绍如何在 container 里面生成 coredump 文件并拷贝出来，然后使用 GDB 去 debug。" />
+    <meta property="twitter:description" content="简单介绍如何在 container 里面生成 coredump 文件并拷贝出来，然后使用 GDB 去 debug。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="coredump,container,GDB">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2019/12/how-_to_copy_coredump_in_the_container/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/docker" title="Docker">
+                            Docker
+                        </a>
+                        
+                        <a class="tag" href="/tags/coredump" title="Coredump">
+                            Coredump
+                        </a>
+                        
+                    </div>
+                    <h1>如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Monday, December 2, 2019
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="前言">前言</h2>
+<p>为什么会记录这篇文章呢，是因为在工作中，遇到了这个问题，由于我们这个是 C++写的代码，crash tracing 并没有 golang 好，所以代码 crash 在 pod 中的 container 里面，很难调查。最多的也就是多加 log，但是你懂的，添加 log debug 效率还是蛮低的。所以就要用 coredump 去快速找到问题所在。但是就遇到文章的问题。你怎么去 pod 中的 container 生成 coredump 呢，然后拷到本地 gdb 呢？</p>
+<h2 id="在-helm-chart-里面加上一个-initcontainer">在 helm chart 里面加上一个 initContainer</h2>
+<ul>
+<li>
+<p>在 deployment.yaml 里面添加一个 initContainer 和 volume</p>
+<pre><code>```yaml
+  volumes:
+  - name: dumps
+    emptyDir: {}
+  initContainers:
+  - name: {{ .Values.initContainers.coredumps.service.name }}
+    image: &quot;{{ .Values.global.registry.url }}/{{ .Values.imageCredentials.repoPath }}/{{.Values.initContainers.coredumps.images.name }}:{{ .Values.initContainers.coredumps.images.tag}}&quot;
+    command: ['sh', '-c', 'ulimit -c unlimited; echo &quot;{{ .Values.initContainers.coredumps.service.dst }}/core.%e.%p.%h.%t&quot; &gt; /proc/sys/kernel/core_pattern;']
+    securityContext:
+      privileged: true
+```
+</code></pre>
+</li>
+<li>
+<p>为需要生成 coredump 的 container 加上个 volumeMounts.</p>
+<pre><code>``` yaml
+  volumeMounts:
+  - name: dumps
+    mountPath: {{ .Values.initContainers.coredumps.service.dst }}
+```
+</code></pre>
+</li>
+<li>
+<p>添加下面 code 在你的 value.yaml 里面 （如何你在第一步里面是 hardcode 的话，这里可以省略）</p>
+<pre><code>``` yaml
+# here image i used suse, you can use &quot;docker pull registry.suse.com/suse/sles12sp4&quot; pull ito your local
+# and then use &quot;docker tag xxx bbb&quot; command to retag it(this command can omit if you usorigin tag directly)
+initContainers:
+  coredumps:
+    images:
+      name: xxx
+      tag: 1.xxx
+    service:
+      name: coredumps
+      dst: /root/dumps
+```
+</code></pre>
+</li>
+</ul>
+<h2 id="用-debug-模式编译代码然后-docker-build-一个-image">用 debug 模式编译代码，然后 docker build 一个 image</h2>
+<ul>
+<li>
+<p>可参考下面命令生成 image</p>
+<pre><code>``` shell
+// &quot;.&quot; means current directory
+docker build XXXX .
+```
+</code></pre>
+</li>
+</ul>
+<h2 id="更新你的-image-到-deployment-里面">更新你的 image 到 deployment 里面</h2>
+<p>这里有两个方案：</p>
+<ul>
+<li>
+<p>用下面命令直接在线修改你的 deployment, k8s 通过重启 pod 动态生效。</p>
+<pre><code>``` shell
+kubectl edit deploy your_deployment_name
+```
+</code></pre>
+</li>
+<li>
+<p>修改本地 deployment.yaml 文件，然后在 kubectl upgrade 更新（基于 helm install 的方式）.</p>
+</li>
+</ul>
+<h2 id="找到你挂载的-coredump-文件映射到本地的具体目录">找到你挂载的 coredump 文件映射到本地的具体目录</h2>
+<ul>
+<li>
+<p>可参考下面命令</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker ps | grep ApplicationName  <span style="color:#6272a4">#to found container id .</span>
+docker inspect container id | grep dump <span style="color:#6272a4">#to found dir that docker volume mapped local dir.</span>
+</code></pre></div></li>
+</ul>
+<h2 id="将生成的-coredump-文件拷贝到你本地目录">将生成的 coredump 文件拷贝到你本地目录</h2>
+<p><strong>Note:</strong> 其实好像还有个 docker cp 命令可以拷贝文件，但是我没有在这个情况亲自尝试过，这是用过将本地文件 copy 到 container 里面 . 具体怎么使用，可以参考官网指导 <a href="https://docs.docker.com/engine/reference/commandline/cp/">docker cp command guidance</a>.</p>
+<h2 id="copy-file-fromto-minikube">copy file from/to minikube</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">    1. minikube ssh -p master
+    2. sudo passwd docker // to create a new password.
+    3. <span style="color:#8be9fd;font-style:italic">exit</span> from ssh 
+    4. scp /local/path/file docker@minikubeip:/destionation/folder
+</code></pre></div><h2 id="抓取coredump-in-minikube">抓取coredump in minikube</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">    1. minikube ssh -p master
+    2. sudo -i
+    3. ps -axu |grep processinfo
+    4. ctr -n k8s.io task list |grep processId
+    5. ctr -n k8s.io c info <span style="color:#ff79c6">$(</span>ctr -n k8s.io taks list | grep processID | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> | grep core
+    6. copy file to <span style="color:#8be9fd;font-style:italic">local</span> from minikube
+</code></pre></div><h2 id="gdb-调试你的程序">gdb 调试你的程序</h2>
+<h2 id="总结">总结</h2>
+<p>本文讲的方式是在主 container 运行之前，启动一个定制的 initContainer，目的是将 coredump 默认生成文件目录修改到自己设定的目录下。然后就可以将 coredump 文件弄出到本地，进行 debug 分析。</p>
+<h2 id="参考文章">参考文章</h2>
+<ul>
+<li>
+<p><a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">k8s init container</a></p>
+</li>
+<li>
+<p><a href="https://kubernetes.io/docs/concepts/storage/volumes/#emptydir">k8s empty Dir</a></p>
+</li>
+</ul>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2019/12/profiling-c-with-perf-in-the-linux-env/" data-toggle="tooltip" data-placement="top" title="用 Perf 给 C&#43;&#43; 代码做 Profiling">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2019/12/how_to_grab_tcpdump_in_container/" data-toggle="tooltip" data-placement="top" title="如何抓取 pod 中的 container 的 Tcpdump">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

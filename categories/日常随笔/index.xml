@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>日常随笔 on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/</link>
+    <description>Recent content in 日常随笔 on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sat, 14 Dec 2019 13:22:05 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>谈谈我对 CSDN 的个人感受</title>
+      <link>https://luffyao.github.io/2019/12/personal_thinking_of_csdn/</link>
+      <pubDate>Sat, 14 Dec 2019 13:22:05 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/personal_thinking_of_csdn/</guid>
+      <description>CSDN 尽然拒绝了我这篇文章的发表！！！ Are you kidding me? 谈谈我对 CSDN 的个人感受 不知不觉已经在 CSDN 有 6 个年头了，多多少少也写了不少 blog 了。但是我想这应该是我最后一</description>
+    </item>
+    
+  </channel>
+</rss>

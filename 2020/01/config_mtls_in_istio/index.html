@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="istio 配置 mtls" />
+    <meta property="og:title" content="istio 配置 mtls" />
+    <meta property="twitter:title" content="istio 配置 mtls" />
+    
+
+    
+    <meta name="description" content="与你一起发现更大的世界。">
+    <meta property="og:description" content="与你一起发现更大的世界。" />
+    <meta property="twitter:description" content="与你一起发现更大的世界。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="istio,mtls">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>istio 配置 mtls | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2020/01/config_mtls_in_istio/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/istio" title="Istio">
+                            Istio
+                        </a>
+                        
+                        <a class="tag" href="/tags/mtls" title="mTLS">
+                            mTLS
+                        </a>
+                        
+                    </div>
+                    <h1>istio 配置 mtls</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Friday, January 10, 2020
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h1 id="istio-mtls-summary">ISTIO MTLS SUMMARY</h1>
+<p><em><strong>THIS IS BASED ON ISTIO OFFICIAL PACKAGE ISTIO-1.3.5(FOLLOWING ALL OF ISTIO DOCS MUST OVER THE WALL,YOU CAN REFERENCE THE LATEST VERDION DOCS), BECAUSE OUR ENV VERSION IS BASED ON THIS VERSION.</strong></em></p>
+<h2 id="test-flow">Test Flow</h2>
+<p>TODO</p>
+<h2 id="update-meshpolicy-from-permissive-to-strict">Update MeshPolicy from PERMISSIVE to STRICT</h2>
+<p><strong>NOTE: More infor about this in our ENV, please look at following Question section Q2</strong></p>
+<p>Reference link <a href="https://archive.istio.io/v1.3/docs/reference/config/istio.authentication.v1alpha1/#MutualTls-Mode">MutlalTls-Mode</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl get meshpolicy
+kubectl edit meshpolicy
+
+</code></pre></div><pre tabindex="0"><code>///// then manually update mtls.mode to STRICT
+</code></pre><h2 id="generate-ca-key-and-cert">Generate CA ,key and cert</h2>
+<p>You can reference this link <a href="https://archive.istio.io/v1.3/docs/tasks/traffic-management/ingress/secure-ingress-mount/">secure-ingress-mount</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">git clone https://github.com/nicholasjackson/mtls-go-example
+<span style="color:#8be9fd;font-style:italic">cd</span> mtls-go-example
+
+/////// Note: change &lt;password&gt;  to any value you like
+
+./generate.sh your_fqdn &lt;password&gt;
+mkdir ../your_fqdn <span style="color:#ff79c6">&amp;&amp;</span> mv 1_root 2_intermediate 3_application 4_client ../your_fqdn <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#8be9fd;font-style:italic">cd</span> ..
+
+</code></pre></div><p>Then all of CA key and cert moved into your_fqdn DIR.</p>
+<p><strong>NOTE: Following all of create sceret command must under the same DIR with your_fqdn.</strong></p>
+<h2 id="intergration-mtls">Intergration MTLS</h2>
+<h3 id="incoming-traffic-with-mtls-ingressgateway">Incoming Traffic with MTLS (Ingressgateway)</h3>
+<ol>
+<li>
+<p>Deploy a httpbin service under default namespace and enabled sidecar injection</p>
+<p>Reference command: <strong>kubectl apply -f &lt;(istioctl kube-inject -f httpbin.yaml)</strong></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: v1
+<span style="color:#ff79c6">kind</span>: Service
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: httpbin
+  <span style="color:#ff79c6">labels</span>:
+    <span style="color:#ff79c6">app</span>: httpbin
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">ports</span>:
+  - <span style="color:#ff79c6">name</span>: http
+    <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">8000</span>
+    <span style="color:#ff79c6">targetPort</span>: <span style="color:#bd93f9">80</span>
+  <span style="color:#ff79c6">selector</span>:
+    <span style="color:#ff79c6">app</span>: httpbin
+---
+<span style="color:#ff79c6">apiVersion</span>: apps/v1
+<span style="color:#ff79c6">kind</span>: Deployment
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: httpbin
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">replicas</span>: <span style="color:#bd93f9">1</span>
+  <span style="color:#ff79c6">selector</span>:
+    <span style="color:#ff79c6">matchLabels</span>:
+      <span style="color:#ff79c6">app</span>: httpbin
+      <span style="color:#ff79c6">version</span>: v1
+  <span style="color:#ff79c6">template</span>:
+    <span style="color:#ff79c6">metadata</span>:
+      <span style="color:#ff79c6">labels</span>:
+        <span style="color:#ff79c6">app</span>: httpbin
+        <span style="color:#ff79c6">version</span>: v1
+    <span style="color:#ff79c6">spec</span>:
+      <span style="color:#ff79c6">containers</span>:
+      - <span style="color:#ff79c6">image</span>: docker.io/kennethreitz/httpbin
+        <span style="color:#ff79c6">imagePullPolicy</span>: IfNotPresent
+        <span style="color:#ff79c6">name</span>: httpbin
+        <span style="color:#ff79c6">ports</span>:
+        - <span style="color:#ff79c6">containerPort</span>: <span style="color:#bd93f9">80</span>
+</code></pre></div></li>
+<li>
+<p>Create two secrets <strong>istio-ingressgateway-certs</strong> and <strong>istio-ingressgateway-ca-certs</strong> under <strong>istio-system</strong> namespace</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl create -n istio-system secret tls istio-ingressgateway-certs --key your_fqdn/3_application/private/your_fqdn.key.pem --cert your_fqdn/3_applicationcerts/your_fqdn.cert.pem
+kubectl create -n istio-system secret generic istio-ingressgateway-ca-certs --from-file<span style="color:#ff79c6">=</span>your_fqdn/2_intermediate/certs/ca-chain.cert.pem
+</code></pre></div></li>
+<li>
+<p>Define a Gateway and VirtualService and DestinationRule</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">kubectl apply -f - &lt;&lt;EOF
+<span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+<span style="color:#ff79c6">kind</span>: Gateway
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: httpbin-gateway
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">selector</span>:
+    <span style="color:#ff79c6">istio</span>: ingressgateway <span style="color:#6272a4"># use istio default ingress gateway</span>
+  <span style="color:#ff79c6">servers</span>:
+  - <span style="color:#ff79c6">port</span>:
+      <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">443</span>
+      <span style="color:#ff79c6">name</span>: https
+      <span style="color:#ff79c6">protocol</span>: HTTPS
+    <span style="color:#ff79c6">tls</span>:
+      <span style="color:#ff79c6">mode</span>: MUTUAL
+      <span style="color:#ff79c6">serverCertificate</span>: /etc/istio/ingressgateway-certs/tls.crt
+      <span style="color:#ff79c6">privateKey</span>: /etc/istio/ingressgateway-certs/tls.key
+      <span style="color:#ff79c6">caCertificates</span>: /etc/istio/ingressgateway-ca-certs/ca-chain.cert.pem
+    <span style="color:#ff79c6">hosts</span>:
+    - <span style="color:#f1fa8c">&#34;*&#34;</span>
+EOF
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">kubectl apply -f - &lt;&lt;EOF
+<span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+<span style="color:#ff79c6">kind</span>: VirtualService
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: httpbin
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">hosts</span>:
+  - <span style="color:#f1fa8c">&#34;your_fqdn&#34;</span>
+  <span style="color:#ff79c6">gateways</span>:
+  - httpbin-gateway
+  <span style="color:#ff79c6">http</span>:
+  - <span style="color:#ff79c6">match</span>:
+    - <span style="color:#ff79c6">uri</span>:
+        <span style="color:#ff79c6">prefix</span>: /status
+    - <span style="color:#ff79c6">uri</span>:
+        <span style="color:#ff79c6">prefix</span>: /delay
+    <span style="color:#ff79c6">route</span>:
+    - <span style="color:#ff79c6">destination</span>:
+        <span style="color:#ff79c6">port</span>:
+          <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">8000</span>
+        <span style="color:#ff79c6">host</span>: httpbin
+EOF
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">kubectl apply -f - &lt;&lt;EOF
+<span style="color:#ff79c6">apiVersion</span>: <span style="color:#f1fa8c">&#34;networking.istio.io/v1alpha3&#34;</span>
+<span style="color:#ff79c6">kind</span>: DestinationRule
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: httpbin
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">host</span>: <span style="color:#f1fa8c">&#34;httpbin&#34;</span>
+  <span style="color:#ff79c6">trafficPolicy</span>:
+    <span style="color:#ff79c6">tls</span>:
+      <span style="color:#ff79c6">mode</span>: ISTIO_MUTUAL
+EOF
+</code></pre></div></li>
+<li>
+<p>Check Cert and CA</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl <span style="color:#8be9fd;font-style:italic">exec</span> -it <span style="color:#ff79c6">$(</span>kubectl get pods -n istio-system| grep ingress | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> -n istio-system -- ls /etc/istio/ingressgateway-certs/
+kubectl <span style="color:#8be9fd;font-style:italic">exec</span> -it <span style="color:#ff79c6">$(</span>kubectl get pods -n istio-system| grep ingress | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> -n istio-system -- ls /etc/istio/ingressgateway-ca-certs/
+</code></pre></div></li>
+<li>
+<p>Using CURL command to test it.</p>
+<p><strong>NOTE: 31390 is NodePort, because in minikube we haven&rsquo;t EXTERNAL-IP, so we must use Node port. detailed message please reference link <a href="https://archive.istio.io/v1.3/docs/tasks/traffic-management/ingress/ingress-control/">ingress-control</a></strong></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -HHost:your_fqdn --resolve your_fqdn:31390:10.120.20.63 --cacert  your_fqdn/2_intermediate/certs/ca-chain.cert.pem --cert your_fqdn/4_client/certs/your_fqdn.cert.pem --key your_fqdn/4_client/private/your_fqdn.key.pem https://your_fqdn:31390/status/418 -v
+</code></pre></div><p>The successful mark is you will see a teapot</p>
+</li>
+</ol>
+<h3 id="outgoing-traffic-with-mtls-serviceentry">Outgoing Traffic with MTLS (ServiceEntry)</h3>
+<ol>
+<li>
+<p>Create an <strong>external</strong> namespace</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl create namespace external
+</code></pre></div></li>
+<li>
+<p>Create client secret under <strong>external</strong> namespace</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl create -n external secret tls testsleep --key your_fqdn/4_client/private/your_fqdn.key.pem --cert your_fqdn/4_client/certs/your_fqdn.cert.pem
+
+kubectl create -n external secret generic ca --from-file<span style="color:#ff79c6">=</span>your_fqdn/2_intermediate/certs/ca-chain.cert.pem
+</code></pre></div></li>
+<li>
+<p>Deploy sleep service under <strong>external</strong> namespace.</p>
+<p><strong>NOTE: Following files ,you must install it under external namespace.</strong></p>
+<ul>
+<li>
+<p>Deploy sleep under <strong>external</strong> namespace and enable injection.</p>
+<p>Reference command: <em><strong>kubectl apply -f &lt;(istioctl kube-inject -f sleep.yaml) -n external</strong></em></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#6272a4">###contents of the sleep.yaml</span>
+   <span style="color:#ff79c6">apiVersion</span>: v1
+   <span style="color:#ff79c6">kind</span>: ServiceAccount
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: sleep
+   ---
+   <span style="color:#ff79c6">apiVersion</span>: v1
+   <span style="color:#ff79c6">kind</span>: Service
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: sleep
+     <span style="color:#ff79c6">labels</span>:
+       <span style="color:#ff79c6">app</span>: sleep
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">80</span>
+       <span style="color:#ff79c6">name</span>: http
+     <span style="color:#ff79c6">selector</span>:
+       <span style="color:#ff79c6">app</span>: sleep
+   ---
+   <span style="color:#ff79c6">apiVersion</span>: apps/v1
+   <span style="color:#ff79c6">kind</span>: Deployment
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: sleep
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">replicas</span>: <span style="color:#bd93f9">1</span>
+     <span style="color:#ff79c6">selector</span>:
+       <span style="color:#ff79c6">matchLabels</span>:
+         <span style="color:#ff79c6">app</span>: sleep
+     <span style="color:#ff79c6">template</span>:
+       <span style="color:#ff79c6">metadata</span>:
+         <span style="color:#ff79c6">labels</span>:
+           <span style="color:#ff79c6">app</span>: sleep
+         <span style="color:#ff79c6">annotations</span>:
+           <span style="color:#ff79c6">sidecar.istio.io/inject</span>: <span style="color:#f1fa8c">&#34;true&#34;</span>
+           <span style="color:#ff79c6">sidecar.istio.io/userVolume</span>: <span style="color:#f1fa8c">&#39;{&#34;client-secret&#34;: {&#34;secret&#34;: {&#34;secretName&#34;:&#34;testsleep&#34;}},&#34;ca-secret&#34;: {&#34;secret&#34;: {&#34;secretName&#34;:&#34;ca&#34;}}}&#39;</span>
+           <span style="color:#ff79c6">sidecar.istio.io/userVolumeMount</span>: <span style="color:#f1fa8c">&#39;{&#34;client-secret&#34;: {&#34;mountPath&#34;:&#34;/etc/client-cert/&#34;,&#34;readOnly&#34;:true},&#34;ca-secret&#34;:{&#34;mountPath&#34;:&#34;/etc/ca-cert/&#34;}}&#39;</span>
+       <span style="color:#ff79c6">spec</span>:
+         <span style="color:#ff79c6">serviceAccountName</span>: sleep
+         <span style="color:#ff79c6">containers</span>:
+         - <span style="color:#ff79c6">name</span>: sleep
+           <span style="color:#ff79c6">image</span>: governmentpaas/curl-ssl
+           <span style="color:#ff79c6">command</span>: [<span style="color:#f1fa8c">&#34;/bin/sleep&#34;</span>, <span style="color:#f1fa8c">&#34;3650d&#34;</span>]
+           <span style="color:#ff79c6">imagePullPolicy</span>: IfNotPresent
+   ---
+</code></pre></div></li>
+<li>
+<p>Deploy VS,DR, SE under <strong>external</strong> namespace</p>
+<p>Reference command: <em><strong>kubectl apply -f xxxx.yaml -n external</strong></em></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#6272a4">#### contents of the XXXX.yaml</span>
+   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: VirtualService
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+     <span style="color:#ff79c6">namespace</span>: external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+     - your_fqdn
+     <span style="color:#ff79c6">http</span>:
+     - <span style="color:#ff79c6">match</span>:
+       - <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">route</span>:
+       - <span style="color:#ff79c6">destination</span>:
+           <span style="color:#ff79c6">host</span>: your_fqdn
+           <span style="color:#ff79c6">port</span>:
+             <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+   ---
+   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: DestinationRule
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">host</span>: your_fqdn
+     <span style="color:#ff79c6">trafficPolicy</span>:
+       <span style="color:#ff79c6">loadBalancer</span>:
+         <span style="color:#ff79c6">simple</span>: ROUND_ROBIN
+       <span style="color:#ff79c6">portLevelSettings</span>:
+       - <span style="color:#ff79c6">port</span>:
+           <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+         <span style="color:#ff79c6">tls</span>:
+           <span style="color:#ff79c6">mode</span>: MUTUAL
+           <span style="color:#ff79c6">clientCertificate</span>: /etc/client-cert/tls.crt
+           <span style="color:#ff79c6">privateKey</span>: /etc/client-cert/tls.key
+           <span style="color:#ff79c6">caCertificates</span>: /etc/ca-cert/ca-chain.cert.pem
+   ---
+   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: ServiceEntry
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+     - your_fqdn
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">name</span>: http
+       <span style="color:#ff79c6">protocol</span>: HTTP
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+       <span style="color:#ff79c6">name</span>: https
+       <span style="color:#ff79c6">protocol</span>: HTTPS
+     <span style="color:#ff79c6">resolution</span>: DNS
+     <span style="color:#ff79c6">location</span>: MESH_EXTERNAL
+</code></pre></div></li>
+</ul>
+</li>
+<li>
+<p>Check CA and Cert</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl <span style="color:#8be9fd;font-style:italic">exec</span> -it <span style="color:#ff79c6">$(</span>kubectl get pods -n external| grep sleep | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> -c istio-proxy -n external -- ls /etc/client-cert/
+kubectl <span style="color:#8be9fd;font-style:italic">exec</span> -it <span style="color:#ff79c6">$(</span>kubectl get pods -n external| grep sleep | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> -c istio-proxy -n external -- ls /etc/ca-cert/
+</code></pre></div></li>
+<li>
+<p>Test Client</p>
+<ul>
+<li>
+<p>kubectl exec into sleep container</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl <span style="color:#8be9fd;font-style:italic">exec</span> -it <span style="color:#ff79c6">$(</span>kubectl get pods -n external| grep sleep | awk -F <span style="color:#f1fa8c">&#34; &#34;</span> <span style="color:#f1fa8c">&#39;{print $1}&#39;</span><span style="color:#ff79c6">)</span> -c sleep -n external -- /bin/sh
+</code></pre></div></li>
+<li>
+<p>Testing</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -HHost:your_fqdn --resolve your_fqdn:31380:10.120.20.63 -svL http://your_fqdn:31380/status/418
+curl -HHost:your_fqdn --resolve your_fqdn:31390:10.120.20.63 -svL http://your_fqdn:31390/status/418
+</code></pre></div></li>
+</ul>
+<p>The successful mark is you will see a teapot</p>
+</li>
+</ol>
+<h2 id="test-analysisip-and-fqdn">Test Analysis(IP and FQDN)</h2>
+<ol>
+<li>
+<p>update VS, DR supports wildcard. please look at following example.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+<span style="color:#ff79c6">kind</span>: VirtualService
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: test-external
+  <span style="color:#ff79c6">namespace</span>: external
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">hosts</span>:
+  - <span style="color:#f1fa8c">&#34;*.com&#34;</span>
+  <span style="color:#ff79c6">http</span>:
+  - <span style="color:#ff79c6">match</span>:
+    - <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">31380</span>
+    <span style="color:#ff79c6">route</span>:
+    - <span style="color:#ff79c6">destination</span>:
+        <span style="color:#ff79c6">host</span>: <span style="color:#f1fa8c">&#34;*.com&#34;</span>
+        <span style="color:#ff79c6">port</span>:
+          <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+---
+<span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+<span style="color:#ff79c6">kind</span>: DestinationRule
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: test-external
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">host</span>: <span style="color:#f1fa8c">&#34;*.com&#34;</span>
+  <span style="color:#ff79c6">trafficPolicy</span>:
+    <span style="color:#ff79c6">loadBalancer</span>:
+      <span style="color:#ff79c6">simple</span>: ROUND_ROBIN
+    <span style="color:#ff79c6">portLevelSettings</span>:
+    - <span style="color:#ff79c6">port</span>:
+        <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+      <span style="color:#ff79c6">tls</span>:
+        <span style="color:#ff79c6">mode</span>: MUTUAL
+        <span style="color:#ff79c6">clientCertificate</span>: /etc/client-cert/tls.crt
+        <span style="color:#ff79c6">privateKey</span>: /etc/client-cert/tls.key
+        <span style="color:#ff79c6">caCertificates</span>: /etc/ca-cert/ca-chain.cert.pem
+</code></pre></div></li>
+<li>
+<p>update SE to support FQDN and IP</p>
+<ul>
+<li>
+<p>test wildcard</p>
+<p><strong>NOTE: this scenario,&ldquo;resolution&rdquo; field must fills in &ldquo;NONE&rdquo;, otherwise appear an error when configuration.</strong></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: ServiceEntry
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+      - <span style="color:#f1fa8c">&#39;*.com&#39;</span>
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">name</span>: http
+       <span style="color:#ff79c6">protocol</span>: HTTP
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+       <span style="color:#ff79c6">name</span>: https
+       <span style="color:#ff79c6">protocol</span>: HTTPS
+     <span style="color:#ff79c6">resolution</span>: NONE
+     <span style="color:#ff79c6">location</span>: MESH_EXTERNAL
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl -HHost:your_fqdn --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+<span style="color:#6272a4"># curl -HHost:your_fqdn --http2-prior-knowledge -svL http://your_fqdn:31380/status/418</span>
+</code></pre></div><p>Test result:(maybe need other configuration) :503.</p>
+</li>
+<li>
+<p>test IP only</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: ServiceEntry
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+      - <span style="color:#f1fa8c">&#39;*.com&#39;</span>
+     <span style="color:#ff79c6">endpoints</span>:
+       - <span style="color:#ff79c6">address</span>: <span style="color:#bd93f9">10.120.20.63</span>
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">name</span>: http
+       <span style="color:#ff79c6">protocol</span>: HTTP
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+       <span style="color:#ff79c6">name</span>: https
+       <span style="color:#ff79c6">protocol</span>: HTTPS
+     <span style="color:#ff79c6">resolution</span>: STATIC
+     <span style="color:#ff79c6">location</span>: MESH_EXTERNAL
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl -HHost:your_fqdn  --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+</code></pre></div><p>Test result: OK. haven&rsquo;t DNS resolution.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl   --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+</code></pre></div><p>Test result: 502</p>
+</li>
+<li>
+<p>test FQDN only</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: ServiceEntry
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+      - <span style="color:#f1fa8c">&#39;*.com&#39;</span>
+     <span style="color:#ff79c6">endpoints</span>:
+       - <span style="color:#ff79c6">address</span>: your_fqdn
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">name</span>: http
+       <span style="color:#ff79c6">protocol</span>: HTTP
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+       <span style="color:#ff79c6">name</span>: https
+       <span style="color:#ff79c6">protocol</span>: HTTPS
+     <span style="color:#ff79c6">resolution</span>: DNS
+     <span style="color:#ff79c6">location</span>: MESH_EXTERNAL
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl -HHost:your_fqdn  --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+</code></pre></div><p>Test result: OK. have DNS resolution.</p>
+</li>
+<li>
+<p>test both FQDN and IP</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">   <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+   <span style="color:#ff79c6">kind</span>: ServiceEntry
+   <span style="color:#ff79c6">metadata</span>:
+     <span style="color:#ff79c6">name</span>: test-external
+   <span style="color:#ff79c6">spec</span>:
+     <span style="color:#ff79c6">hosts</span>:
+      - <span style="color:#f1fa8c">&#39;*.com&#39;</span>
+     <span style="color:#ff79c6">endpoints</span>:
+       - <span style="color:#ff79c6">address</span>: your_fqdn
+       - <span style="color:#ff79c6">address</span>: <span style="color:#bd93f9">10.120.20.63</span>
+     <span style="color:#ff79c6">ports</span>:
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31380</span>
+       <span style="color:#ff79c6">name</span>: http
+       <span style="color:#ff79c6">protocol</span>: HTTP
+     - <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">31390</span>
+       <span style="color:#ff79c6">name</span>: https
+       <span style="color:#ff79c6">protocol</span>: HTTPS
+     <span style="color:#ff79c6">resolution</span>: DNS
+     <span style="color:#ff79c6">location</span>: MESH_EXTERNAL
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl -HHost:your_fqdn -svL http://your_fqdn:31380/status/418</span>
+</code></pre></div><p>Test result: OK , have DNS resolution</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl -HHost:your_fqdn  --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+</code></pre></div><p>Test result: OK, haven&rsquo;t DNS resolution</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl   --http2-prior-knowledge -svL http://your_fqdn:31380/status/418</span>
+</code></pre></div><p>Test result: OK.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#6272a4"># curl   --http2-prior-knowledge -svL http://10.120.20.63:31380/status/418</span>
+</code></pre></div><p>Test result: 502</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Test Analysis</p>
+<ul>
+<li>
+<p>IP Only.</p>
+<p>Even only we have IP, we still must override Host header to match VS host. so here has a problem.</p>
+</li>
+<li>
+<p>FQDN Only.</p>
+<p>This is OK. if FQDN can match VS host.</p>
+</li>
+<li>
+<p>Both IP and FQDN.</p>
+<p>Here still have a problem the same as only IP scenario.</p>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="conclusion">Conclusion</h2>
+<p>C1. If want to transfor port from 31380 to 31390 as above client Test, you must add 31380 port message into related ServiceEntry,otherwise curl connection will be reset by peer(this is because if you didn&rsquo;t add 31380 port message in SE, the sleep service doesn&rsquo;t listen 0.0.0.0 31380.). so if we have many different port need transfor, then we must add port into related SE.</p>
+<h2 id="questions">Questions</h2>
+<p>Q1. Testing ingressgateway HTTP Protocol is HTTP2.0, but Through sleep container, HTTP Protocol is HTTP1.1. Is this normal phenomenon?<br>
+A1. using <strong>&quot;&ndash;http2-prior-knowledge&quot;</strong> in the curl command ,then HTTP protocol is HTTP2. so this isn&rsquo;t an issue.</p>
+<p>Q2. If i set meshpolicy tls mode is PERMISSIVE . then i can&rsquo;t install httpbin DR, the test also can success. but if i set it to STRICT, then test will failed. so maybe in our ENV, we don&rsquo;t need set mode to STRICT(default is PERMISSIVE), because our ENV internal service communications don&rsquo;t use TLS as our previous ARCH.</p>
+<p>Q3. If we use directly IPs to send out to external service, we must override Host header to match VS host, otherwise we have 502 error.</p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2019/12/understanding_of_iptables/" data-toggle="tooltip" data-placement="top" title="深入理解 iptables 工作原理">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2020/03/how_to_profiling_go_in_pod/" data-toggle="tooltip" data-placement="top" title="如何在 pod 中做 golang 的 profiling">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

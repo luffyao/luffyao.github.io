@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="记一次 Kubectl 删除 Pod 的过程分析" />
+    <meta property="og:title" content="记一次 Kubectl 删除 Pod 的过程分析" />
+    <meta property="twitter:title" content="记一次 Kubectl 删除 Pod 的过程分析" />
+    
+
+    
+    <meta name="description" content="从源码角度分析 Kubectl 命令删除 Pod 的完整过程">
+    <meta property="og:description" content="从源码角度分析 Kubectl 命令删除 Pod 的完整过程" />
+    <meta property="twitter:description" content="从源码角度分析 Kubectl 命令删除 Pod 的完整过程" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="Kubernetes,Docker,Pod">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>记一次 Kubectl 删除 Pod 的过程分析 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2021/09/what-happened-when-delete-pod/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/kubernetes" title="Kubernetes">
+                            Kubernetes
+                        </a>
+                        
+                        <a class="tag" href="/tags/docker" title="Docker">
+                            Docker
+                        </a>
+                        
+                    </div>
+                    <h1>记一次 Kubectl 删除 Pod 的过程分析</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Friday, September 3, 2021
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="前言">前言</h2>
+<p>当你输入 <code>kubectl delete pods podname</code> 时，K8s 到底是如何将你的 pod 杀死的呢。这篇文章将从源码的角度，带你一起分析这个过程。</p>
+<h2 id="分析">分析</h2>
+<p>当我们调用 <code>Kubectl delete pods</code> 命令的时候，kubectl 会调用 <code>DELETE POD</code> 的 API, APIServer 会更改 pod 的 <code>DeletionTimestamp</code> 和 <code>DeletionGracePeriodSeconds</code> 信息。然后 Kubelet 会进行处理。</p>
+<p>下面从 Kubelet 的角度看看具体的实现。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">syncLoopIteration</span>(configCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> kubetypes.PodUpdate, handler SyncHandler,
+   syncCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> time.Time, housekeepingCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> time.Time, plegCh <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>pleg.PodLifecycleEvent) <span style="color:#8be9fd">bool</span> {
+   <span style="color:#ff79c6">select</span> {
+   <span style="color:#ff79c6">case</span> u, open <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>configCh:
+      <span style="color:#6272a4">// Update from a config source; dispatch it to the right handler
+</span><span style="color:#6272a4"></span>      <span style="color:#6272a4">// callback.
+</span><span style="color:#6272a4"></span>      <span style="color:#ff79c6">if</span> !open {
+         klog.<span style="color:#50fa7b">ErrorS</span>(<span style="color:#ff79c6">nil</span>, <span style="color:#f1fa8c">&#34;Update channel is closed, exiting the sync loop&#34;</span>)
+         <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+      }
+
+      <span style="color:#ff79c6">switch</span> u.Op {
+      <span style="color:#ff79c6">case</span> kubetypes.ADD:
+      <span style="color:#ff79c6">case</span> kubetypes.UPDATE:
+         klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">2</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;SyncLoop UPDATE&#34;</span>, <span style="color:#f1fa8c">&#34;source&#34;</span>, u.Source, <span style="color:#f1fa8c">&#34;pods&#34;</span>, format.<span style="color:#50fa7b">Pods</span>(u.Pods))
+         handler.<span style="color:#50fa7b">HandlePodUpdates</span>(u.Pods)
+      <span style="color:#ff79c6">case</span> kubetypes.REMOVE:
+         klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">2</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;SyncLoop REMOVE&#34;</span>, <span style="color:#f1fa8c">&#34;source&#34;</span>, u.Source, <span style="color:#f1fa8c">&#34;pods&#34;</span>, format.<span style="color:#50fa7b">Pods</span>(u.Pods))
+         handler.<span style="color:#50fa7b">HandlePodRemoves</span>(u.Pods)
+      <span style="color:#ff79c6">case</span> kubetypes.RECONCILE:
+         klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;SyncLoop RECONCILE&#34;</span>, <span style="color:#f1fa8c">&#34;source&#34;</span>, u.Source, <span style="color:#f1fa8c">&#34;pods&#34;</span>, format.<span style="color:#50fa7b">Pods</span>(u.Pods))
+         handler.<span style="color:#50fa7b">HandlePodReconcile</span>(u.Pods)
+      <span style="color:#ff79c6">case</span> kubetypes.DELETE:
+         klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">2</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;SyncLoop DELETE&#34;</span>, <span style="color:#f1fa8c">&#34;source&#34;</span>, u.Source, <span style="color:#f1fa8c">&#34;pods&#34;</span>, format.<span style="color:#50fa7b">Pods</span>(u.Pods))
+         <span style="color:#6272a4">// DELETE is treated as a UPDATE because of graceful deletion.
+</span><span style="color:#6272a4"></span>         handler.<span style="color:#50fa7b">HandlePodUpdates</span>(u.Pods)
+      <span style="color:#ff79c6">case</span> kubetypes.SET:
+         <span style="color:#6272a4">// TODO: Do we want to support this?
+</span><span style="color:#6272a4"></span>         klog.<span style="color:#50fa7b">ErrorS</span>(<span style="color:#ff79c6">nil</span>, <span style="color:#f1fa8c">&#34;Kubelet does not support snapshot update&#34;</span>)
+      <span style="color:#ff79c6">default</span>:
+         klog.<span style="color:#50fa7b">ErrorS</span>(<span style="color:#ff79c6">nil</span>, <span style="color:#f1fa8c">&#34;Invalid operation type received&#34;</span>, <span style="color:#f1fa8c">&#34;operation&#34;</span>, u.Op)
+      }
+
+      kl.sourcesReady.<span style="color:#50fa7b">AddSource</span>(u.Source)
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">true</span>
+}
+</code></pre></div><p>我们可以看到 syncLoopIteration 中 UPDATE 事件会调用 HandlePodUpdates 方法进行处理。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// HandlePodUpdates is the callback in the SyncHandler interface for pods
+</span><span style="color:#6272a4">// being updated from a config source.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">HandlePodUpdates</span>(pods []<span style="color:#ff79c6">*</span>v1.Pod) {
+   start <span style="color:#ff79c6">:=</span> kl.clock.<span style="color:#50fa7b">Now</span>()
+   <span style="color:#ff79c6">for</span> _, pod <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> pods {
+      kl.podManager.<span style="color:#50fa7b">UpdatePod</span>(pod)
+      <span style="color:#ff79c6">if</span> kubetypes.<span style="color:#50fa7b">IsMirrorPod</span>(pod) {
+         kl.<span style="color:#50fa7b">handleMirrorPod</span>(pod, start)
+         <span style="color:#ff79c6">continue</span>
+      }
+      mirrorPod, _ <span style="color:#ff79c6">:=</span> kl.podManager.<span style="color:#50fa7b">GetMirrorPodByPod</span>(pod)
+      kl.<span style="color:#50fa7b">dispatchWork</span>(pod, kubetypes.SyncPodUpdate, mirrorPod, start)
+   }
+}
+
+<span style="color:#6272a4">// dispatchWork starts the asynchronous sync of the pod in a pod worker.
+</span><span style="color:#6272a4">// If the pod has completed termination, dispatchWork will perform no action.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">dispatchWork</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, syncType kubetypes.SyncPodType, mirrorPod <span style="color:#ff79c6">*</span>v1.Pod, start time.Time) {
+   <span style="color:#6272a4">// check whether we are ready to delete the pod from the API server (all status up to date)
+</span><span style="color:#6272a4"></span>   containersTerminal, podWorkerTerminal <span style="color:#ff79c6">:=</span> kl.<span style="color:#50fa7b">podAndContainersAreTerminal</span>(pod)
+   <span style="color:#ff79c6">if</span> pod.DeletionTimestamp <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">&amp;&amp;</span> containersTerminal {
+      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod has completed execution and should be deleted from the API server&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;syncType&#34;</span>, syncType)
+      kl.statusManager.<span style="color:#50fa7b">TerminatePod</span>(pod)
+      <span style="color:#ff79c6">return</span>
+   }
+
+   <span style="color:#6272a4">// optimization: avoid invoking the pod worker if no further changes are possible to the pod definition
+</span><span style="color:#6272a4"></span>   <span style="color:#6272a4">// (i.e. the pod has completed and its containers have been terminated)
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> podWorkerTerminal <span style="color:#ff79c6">&amp;&amp;</span> containersTerminal {
+      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod has completed and its containers have been terminated, ignoring remaining sync work&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;syncType&#34;</span>, syncType)
+      <span style="color:#ff79c6">return</span>
+   }
+
+   <span style="color:#6272a4">// Run the sync in an async worker.
+</span><span style="color:#6272a4"></span>   kl.podWorkers.<span style="color:#50fa7b">UpdatePod</span>(<span style="color:#ff79c6">&amp;</span>UpdatePodOptions{
+      Pod:        pod,
+      MirrorPod:  mirrorPod,
+      UpdateType: syncType,
+      OnCompleteFunc: <span style="color:#8be9fd;font-style:italic">func</span>(err <span style="color:#8be9fd">error</span>) {
+         <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            metrics.PodWorkerDuration.<span style="color:#50fa7b">WithLabelValues</span>(syncType.<span style="color:#50fa7b">String</span>()).<span style="color:#50fa7b">Observe</span>(metrics.<span style="color:#50fa7b">SinceInSeconds</span>(start))
+         }
+      },
+   })
+   <span style="color:#6272a4">// Note the number of containers for new pods.
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> syncType <span style="color:#ff79c6">==</span> kubetypes.SyncPodCreate {
+      metrics.ContainersPerPodCount.<span style="color:#50fa7b">Observe</span>(<span style="color:#8be9fd;font-style:italic">float64</span>(<span style="color:#8be9fd;font-style:italic">len</span>(pod.Spec.Containers)))
+   }
+}
+
+<span style="color:#6272a4">// Apply the new setting to the specified pod.
+</span><span style="color:#6272a4">// If the options provide an OnCompleteFunc, the function is invoked if the update is accepted.
+</span><span style="color:#6272a4">// Update requests are ignored if a kill pod request is pending.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (p <span style="color:#ff79c6">*</span>podWorkers) <span style="color:#50fa7b">UpdatePod</span>(options <span style="color:#ff79c6">*</span>UpdatePodOptions) {
+   pod <span style="color:#ff79c6">:=</span> options.Pod
+   uid <span style="color:#ff79c6">:=</span> pod.UID
+   <span style="color:#8be9fd;font-style:italic">var</span> podUpdates <span style="color:#8be9fd;font-style:italic">chan</span> UpdatePodOptions
+   <span style="color:#8be9fd;font-style:italic">var</span> exists <span style="color:#8be9fd">bool</span>
+
+   p.podLock.<span style="color:#50fa7b">Lock</span>()
+   <span style="color:#ff79c6">defer</span> p.podLock.<span style="color:#50fa7b">Unlock</span>()
+   <span style="color:#ff79c6">if</span> podUpdates, exists = p.podUpdates[uid]; !exists {
+      <span style="color:#6272a4">// Creating a new pod worker either means this is a new pod, or that the
+</span><span style="color:#6272a4"></span>      <span style="color:#6272a4">// kubelet just restarted. In either case the kubelet is willing to believe
+</span><span style="color:#6272a4"></span>      <span style="color:#6272a4">// the status of the pod for the first pod worker sync. See corresponding
+</span><span style="color:#6272a4"></span>      <span style="color:#6272a4">// comment in syncPod.
+</span><span style="color:#6272a4"></span>      <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+         <span style="color:#ff79c6">defer</span> runtime.<span style="color:#50fa7b">HandleCrash</span>()
+         p.<span style="color:#50fa7b">managePodLoop</span>(podUpdates)
+      }()
+   }
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (p <span style="color:#ff79c6">*</span>podWorkers) <span style="color:#50fa7b">managePodLoop</span>(podUpdates <span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> UpdatePodOptions) {
+   <span style="color:#8be9fd;font-style:italic">var</span> lastSyncTime time.Time
+   <span style="color:#ff79c6">for</span> update <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> podUpdates {
+      err <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">error</span> {
+         err = p.<span style="color:#50fa7b">syncPodFn</span>(syncPodOptions{
+            mirrorPod:      update.MirrorPod,
+            pod:            update.Pod,
+            podStatus:      status,
+            killPodOptions: update.KillPodOptions,
+            updateType:     update.UpdateType,
+         })
+         lastSyncTime = time.<span style="color:#50fa7b">Now</span>()
+         <span style="color:#ff79c6">return</span> err
+      }()
+   }
+}
+</code></pre></div><p>上面调用的 syncPodFn 方法，最终真正调用的是 kubelet.syncPod 方法。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">syncPod</span>(o syncPodOptions) <span style="color:#8be9fd">error</span> {
+   <span style="color:#6272a4">/////////////////////////////////////
+</span><span style="color:#6272a4"></span>   runnable <span style="color:#ff79c6">:=</span> kl.<span style="color:#50fa7b">canRunPod</span>(pod)
+
+   <span style="color:#6272a4">// Update status in the status manager
+</span><span style="color:#6272a4"></span>   kl.statusManager.<span style="color:#50fa7b">SetPodStatus</span>(pod, apiPodStatus)
+
+   <span style="color:#6272a4">// Kill pod if it should not be running
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> !runnable.Admit <span style="color:#ff79c6">||</span> pod.DeletionTimestamp <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">||</span> apiPodStatus.Phase <span style="color:#ff79c6">==</span> v1.PodFailed {
+      <span style="color:#8be9fd;font-style:italic">var</span> syncErr <span style="color:#8be9fd">error</span>
+      <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> kl.<span style="color:#50fa7b">killPod</span>(pod, <span style="color:#ff79c6">nil</span>, podStatus, <span style="color:#ff79c6">nil</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+         kl.recorder.<span style="color:#50fa7b">Eventf</span>(pod, v1.EventTypeWarning, events.FailedToKillPod, <span style="color:#f1fa8c">&#34;error killing pod: %v&#34;</span>, err)
+         syncErr = fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;error killing pod: %v&#34;</span>, err)
+         utilruntime.<span style="color:#50fa7b">HandleError</span>(syncErr)
+      } <span style="color:#ff79c6">else</span> {
+         <span style="color:#ff79c6">if</span> !runnable.Admit {
+            <span style="color:#6272a4">// There was no error killing the pod, but the pod cannot be run.
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// Return an error to signal that the sync loop should back off.
+</span><span style="color:#6272a4"></span>            syncErr = fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;pod cannot be run: %s&#34;</span>, runnable.Message)
+         }
+      }
+      <span style="color:#ff79c6">return</span> syncErr
+   }
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+}
+</code></pre></div><p>然后我们可以看到调用下面 kubelet.killPod 的方法进行处理：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// One of the following arguments must be non-nil: runningPod, status.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">killPod</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, runningPod <span style="color:#ff79c6">*</span>kubecontainer.Pod, status <span style="color:#ff79c6">*</span>kubecontainer.PodStatus, gracePeriodOverride <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>) <span style="color:#8be9fd">error</span> {
+   <span style="color:#6272a4">// Call the container runtime KillPod method which stops all running containers of the pod
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> kl.containerRuntime.<span style="color:#50fa7b">KillPod</span>(pod, p, gracePeriodOverride); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#ff79c6">return</span> err
+   }
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+}
+</code></pre></div><p>然后具体的调用链如下：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// KillPod kills all the containers of a pod. Pod may be nil, running pod must not be.
+</span><span style="color:#6272a4">// gracePeriodOverride if specified allows the caller to override the pod default grace period.
+</span><span style="color:#6272a4">// only hard kill paths are allowed to specify a gracePeriodOverride in the kubelet in order to not corrupt user data.
+</span><span style="color:#6272a4">// it is useful when doing SIGKILL for hard eviction scenarios, or max grace period during soft eviction scenarios.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>kubeGenericRuntimeManager) <span style="color:#50fa7b">KillPod</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, runningPod kubecontainer.Pod, gracePeriodOverride <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>) <span style="color:#8be9fd">error</span> {
+   err <span style="color:#ff79c6">:=</span> m.<span style="color:#50fa7b">killPodWithSyncResult</span>(pod, runningPod, gracePeriodOverride)
+   <span style="color:#ff79c6">return</span> err.<span style="color:#50fa7b">Error</span>()
+}
+
+<span style="color:#6272a4">// killPodWithSyncResult kills a runningPod and returns SyncResult.
+</span><span style="color:#6272a4">// Note: The pod passed in could be *nil* when kubelet restarted.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>kubeGenericRuntimeManager) <span style="color:#50fa7b">killPodWithSyncResult</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, runningPod kubecontainer.Pod, gracePeriodOverride <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>) (result kubecontainer.PodSyncResult) {
+   killContainerResults <span style="color:#ff79c6">:=</span> m.<span style="color:#50fa7b">killContainersWithSyncResult</span>(pod, runningPod, gracePeriodOverride)
+   <span style="color:#ff79c6">for</span> _, containerResult <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> killContainerResults {
+      result.<span style="color:#50fa7b">AddSyncResult</span>(containerResult)
+   }
+
+   <span style="color:#6272a4">// stop sandbox, the sandbox will be removed in GarbageCollect
+</span><span style="color:#6272a4"></span>   killSandboxResult <span style="color:#ff79c6">:=</span> kubecontainer.<span style="color:#50fa7b">NewSyncResult</span>(kubecontainer.KillPodSandbox, runningPod.ID)
+   result.<span style="color:#50fa7b">AddSyncResult</span>(killSandboxResult)
+   <span style="color:#6272a4">// Stop all sandboxes belongs to same pod
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">for</span> _, podSandbox <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> runningPod.Sandboxes {
+      <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> m.runtimeService.<span style="color:#50fa7b">StopPodSandbox</span>(podSandbox.ID.ID); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+         killSandboxResult.<span style="color:#50fa7b">Fail</span>(kubecontainer.ErrKillPodSandbox, err.<span style="color:#50fa7b">Error</span>())
+         klog.<span style="color:#50fa7b">ErrorS</span>(<span style="color:#ff79c6">nil</span>, <span style="color:#f1fa8c">&#34;Failed to stop sandbox&#34;</span>, <span style="color:#f1fa8c">&#34;podSandboxID&#34;</span>, podSandbox.ID)
+      }
+   }
+
+   <span style="color:#ff79c6">return</span>
+}
+
+<span style="color:#6272a4">// killContainersWithSyncResult kills all pod&#39;s containers with sync results.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>kubeGenericRuntimeManager) <span style="color:#50fa7b">killContainersWithSyncResult</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, runningPod kubecontainer.Pod, gracePeriodOverride <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>) (syncResults []<span style="color:#ff79c6">*</span>kubecontainer.SyncResult) {
+   containerResults <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>kubecontainer.SyncResult, <span style="color:#8be9fd;font-style:italic">len</span>(runningPod.Containers))
+   wg <span style="color:#ff79c6">:=</span> sync.WaitGroup{}
+
+   wg.<span style="color:#50fa7b">Add</span>(<span style="color:#8be9fd;font-style:italic">len</span>(runningPod.Containers))
+   <span style="color:#ff79c6">for</span> _, container <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> runningPod.Containers {
+      <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>(container <span style="color:#ff79c6">*</span>kubecontainer.Container) {
+         <span style="color:#ff79c6">defer</span> utilruntime.<span style="color:#50fa7b">HandleCrash</span>()
+         <span style="color:#ff79c6">defer</span> wg.<span style="color:#50fa7b">Done</span>()
+
+         killContainerResult <span style="color:#ff79c6">:=</span> kubecontainer.<span style="color:#50fa7b">NewSyncResult</span>(kubecontainer.KillContainer, container.Name)
+         <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> m.<span style="color:#50fa7b">killContainer</span>(pod, container.ID, container.Name, <span style="color:#f1fa8c">&#34;&#34;</span>, reasonUnknown, gracePeriodOverride); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+            killContainerResult.<span style="color:#50fa7b">Fail</span>(kubecontainer.ErrKillContainer, err.<span style="color:#50fa7b">Error</span>())
+            klog.<span style="color:#50fa7b">ErrorS</span>(err, <span style="color:#f1fa8c">&#34;Kill container failed&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;podUID&#34;</span>, pod.UID,
+               <span style="color:#f1fa8c">&#34;containerName&#34;</span>, container.Name, <span style="color:#f1fa8c">&#34;containerID&#34;</span>, container.ID)
+         }
+         containerResults <span style="color:#ff79c6">&lt;-</span> killContainerResult
+      }(container)
+   }
+   <span style="color:#ff79c6">return</span>
+}
+
+</code></pre></div><p>看到这里，我们可以看到运行时会对 pod 中的每个 Container 发送 killContainer 命令。下面再看看这个函数的具体实现：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// killContainer kills a container through the following steps:
+</span><span style="color:#6272a4">// * Run the pre-stop lifecycle hooks (if applicable).
+</span><span style="color:#6272a4">// * Stop the container.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>kubeGenericRuntimeManager) <span style="color:#50fa7b">killContainer</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, containerID kubecontainer.ContainerID, containerName <span style="color:#8be9fd">string</span>, message <span style="color:#8be9fd">string</span>, reason containerKillReason, gracePeriodOverride <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>) <span style="color:#8be9fd">error</span> {
+   <span style="color:#6272a4">// From this point, pod and container must be non-nil.
+</span><span style="color:#6272a4"></span>   gracePeriod <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">int64</span>(minimumGracePeriodInSeconds)
+   <span style="color:#ff79c6">switch</span> {
+   <span style="color:#ff79c6">case</span> pod.DeletionGracePeriodSeconds <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span>:
+      gracePeriod = <span style="color:#ff79c6">*</span>pod.DeletionGracePeriodSeconds
+   <span style="color:#ff79c6">case</span> pod.Spec.TerminationGracePeriodSeconds <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span>:
+      gracePeriod = <span style="color:#ff79c6">*</span>pod.Spec.TerminationGracePeriodSeconds
+
+      <span style="color:#ff79c6">if</span> utilfeature.DefaultFeatureGate.<span style="color:#50fa7b">Enabled</span>(features.ProbeTerminationGracePeriod) {
+         <span style="color:#ff79c6">switch</span> reason {
+         <span style="color:#ff79c6">case</span> reasonStartupProbe:
+            <span style="color:#ff79c6">if</span> containerSpec.StartupProbe <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">&amp;&amp;</span> containerSpec.StartupProbe.TerminationGracePeriodSeconds <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+               gracePeriod = <span style="color:#ff79c6">*</span>containerSpec.StartupProbe.TerminationGracePeriodSeconds
+            }
+         <span style="color:#ff79c6">case</span> reasonLivenessProbe:
+            <span style="color:#ff79c6">if</span> containerSpec.LivenessProbe <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">&amp;&amp;</span> containerSpec.LivenessProbe.TerminationGracePeriodSeconds <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+               gracePeriod = <span style="color:#ff79c6">*</span>containerSpec.LivenessProbe.TerminationGracePeriodSeconds
+            }
+         }
+      }
+   }
+
+   <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(message) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
+      message = fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;Stopping container %s&#34;</span>, containerSpec.Name)
+   }
+   m.<span style="color:#50fa7b">recordContainerEvent</span>(pod, containerSpec, containerID.ID, v1.EventTypeNormal, events.KillingContainer, message)
+
+   <span style="color:#6272a4">// Run internal pre-stop lifecycle hook
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> m.internalLifecycle.<span style="color:#50fa7b">PreStopContainer</span>(containerID.ID); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#ff79c6">return</span> err
+   }
+
+   <span style="color:#6272a4">// Run the pre-stop lifecycle hooks if applicable and if there is enough time to run it
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> containerSpec.Lifecycle <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">&amp;&amp;</span> containerSpec.Lifecycle.PreStop <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">&amp;&amp;</span> gracePeriod &gt; <span style="color:#bd93f9">0</span> {
+      gracePeriod = gracePeriod <span style="color:#ff79c6">-</span> m.<span style="color:#50fa7b">executePreStopHook</span>(pod, containerID, containerSpec, gracePeriod)
+   }
+   <span style="color:#6272a4">// always give containers a minimal shutdown window to avoid unnecessary SIGKILLs
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> gracePeriod &lt; minimumGracePeriodInSeconds {
+      gracePeriod = minimumGracePeriodInSeconds
+   }
+
+   err <span style="color:#ff79c6">:=</span> m.runtimeService.<span style="color:#50fa7b">StopContainer</span>(containerID.ID, gracePeriod)
+   <span style="color:#ff79c6">return</span> err
+}
+</code></pre></div><p>这里是 Kubelet 对删除 Container 的具体的实现逻辑。我们可以看到会有计算 gracePeriod 的值，如果有 PreStop 的 hook，则会先处理该 hook，然后再调用 <code>m.runtimeService.StopContainer(containerID.ID, gracePeriod)</code> 。接下来，我们去看看该方法的实现。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (in instrumentedRuntimeService) <span style="color:#50fa7b">StopContainer</span>(containerID <span style="color:#8be9fd">string</span>, timeout <span style="color:#8be9fd">int64</span>) <span style="color:#8be9fd">error</span> {
+   <span style="color:#8be9fd;font-style:italic">const</span> operation = <span style="color:#f1fa8c">&#34;stop_container&#34;</span>
+   <span style="color:#ff79c6">defer</span> <span style="color:#50fa7b">recordOperation</span>(operation, time.<span style="color:#50fa7b">Now</span>())
+
+   err <span style="color:#ff79c6">:=</span> in.service.<span style="color:#50fa7b">StopContainer</span>(containerID, timeout)
+   <span style="color:#50fa7b">recordError</span>(operation, err)
+   <span style="color:#ff79c6">return</span> err
+}
+</code></pre></div><p>我们可以看到这里调用了运行时的 StopContainer 方法了。下面我们看看 dockershim 中这部分的实现。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// StopContainer stops a running container with a grace period (i.e., timeout).
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (ds <span style="color:#ff79c6">*</span>dockerService) <span style="color:#50fa7b">StopContainer</span>(_ context.Context, r <span style="color:#ff79c6">*</span>runtimeapi.StopContainerRequest) (<span style="color:#ff79c6">*</span>runtimeapi.StopContainerResponse, <span style="color:#8be9fd">error</span>) {
+   err <span style="color:#ff79c6">:=</span> ds.client.<span style="color:#50fa7b">StopContainer</span>(r.ContainerId, time.<span style="color:#50fa7b">Duration</span>(r.Timeout)<span style="color:#ff79c6">*</span>time.Second)
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+   }
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>r
+</code></pre></div><p>看到这里，我们看到在以 dockerd 为运行时的时候，Kubelet 最终会调用到 Docker 提供的 Client 端的 StopContainer 接口（这也是 CRI 的标准接口）。</p>
+<p>下面我们基于 dockerd <a href="https://github.com/moby/moby">moby</a> 的实现，分析具体的删除步骤。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// ContainerStop looks for the given container and stops it.
+</span><span style="color:#6272a4">// In case the container fails to stop gracefully within a time duration
+</span><span style="color:#6272a4">// specified by the timeout argument, in seconds, it is forcefully
+</span><span style="color:#6272a4">// terminated (killed).
+</span><span style="color:#6272a4">//
+</span><span style="color:#6272a4">// If the timeout is nil, the container&#39;s StopTimeout value is used, if set,
+</span><span style="color:#6272a4">// otherwise the engine default. A negative timeout value can be specified,
+</span><span style="color:#6272a4">// meaning no timeout, i.e. no forceful termination is performed.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (daemon <span style="color:#ff79c6">*</span>Daemon) <span style="color:#50fa7b">ContainerStop</span>(name <span style="color:#8be9fd">string</span>, timeout <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int</span>) <span style="color:#8be9fd">error</span> {
+   container, err <span style="color:#ff79c6">:=</span> daemon.<span style="color:#50fa7b">GetContainer</span>(name)
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#ff79c6">return</span> err
+   }
+   <span style="color:#ff79c6">if</span> !container.<span style="color:#50fa7b">IsRunning</span>() {
+      <span style="color:#ff79c6">return</span> containerNotModifiedError{running: <span style="color:#ff79c6">false</span>}
+   }
+   <span style="color:#ff79c6">if</span> timeout <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+      stopTimeout <span style="color:#ff79c6">:=</span> container.<span style="color:#50fa7b">StopTimeout</span>()
+      timeout = <span style="color:#ff79c6">&amp;</span>stopTimeout
+   }
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> daemon.<span style="color:#50fa7b">containerStop</span>(container, <span style="color:#ff79c6">*</span>timeout); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#ff79c6">return</span> errdefs.<span style="color:#50fa7b">System</span>(errors.<span style="color:#50fa7b">Wrapf</span>(err, <span style="color:#f1fa8c">&#34;cannot stop container: %s&#34;</span>, name))
+   }
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+}
+</code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#6272a4">// containerStop sends a stop signal, waits, sends a kill signal.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (daemon <span style="color:#ff79c6">*</span>Daemon) <span style="color:#50fa7b">containerStop</span>(container <span style="color:#ff79c6">*</span>containerpkg.Container, seconds <span style="color:#8be9fd">int</span>) <span style="color:#8be9fd">error</span> {
+   <span style="color:#6272a4">// TODO propagate a context down to this function
+</span><span style="color:#6272a4"></span>   ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">TODO</span>()
+   <span style="color:#ff79c6">if</span> !container.<span style="color:#50fa7b">IsRunning</span>() {
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+   }
+   <span style="color:#8be9fd;font-style:italic">var</span> wait time.Duration
+   <span style="color:#ff79c6">if</span> seconds <span style="color:#ff79c6">&gt;=</span> <span style="color:#bd93f9">0</span> {
+      wait = time.<span style="color:#50fa7b">Duration</span>(seconds) <span style="color:#ff79c6">*</span> time.Second
+   }
+   success <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">error</span> {
+      daemon.<span style="color:#50fa7b">LogContainerEvent</span>(container, <span style="color:#f1fa8c">&#34;stop&#34;</span>)
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+   }
+   stopSignal <span style="color:#ff79c6">:=</span> container.<span style="color:#50fa7b">StopSignal</span>()
+
+   <span style="color:#6272a4">// 1. Send a stop signal
+</span><span style="color:#6272a4"></span>   err <span style="color:#ff79c6">:=</span> daemon.<span style="color:#50fa7b">killPossiblyDeadProcess</span>(container, stopSignal)
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      wait = <span style="color:#bd93f9">2</span> <span style="color:#ff79c6">*</span> time.Second
+   }
+
+   <span style="color:#8be9fd;font-style:italic">var</span> subCtx context.Context
+   <span style="color:#8be9fd;font-style:italic">var</span> cancel context.CancelFunc
+   <span style="color:#ff79c6">if</span> seconds <span style="color:#ff79c6">&gt;=</span> <span style="color:#bd93f9">0</span> {
+      subCtx, cancel = context.<span style="color:#50fa7b">WithTimeout</span>(ctx, wait)
+   } <span style="color:#ff79c6">else</span> {
+      subCtx, cancel = context.<span style="color:#50fa7b">WithCancel</span>(ctx)
+   }
+   <span style="color:#ff79c6">defer</span> <span style="color:#50fa7b">cancel</span>()
+
+   <span style="color:#ff79c6">if</span> status <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>container.<span style="color:#50fa7b">Wait</span>(subCtx, containerpkg.WaitConditionNotRunning); status.<span style="color:#50fa7b">Err</span>() <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#6272a4">// container did exit, so ignore any previous errors and return
+</span><span style="color:#6272a4"></span>      <span style="color:#ff79c6">return</span> <span style="color:#50fa7b">success</span>()
+   }
+
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#6272a4">// the container has still not exited, and the kill function errored, so log the error here:
+</span><span style="color:#6272a4"></span>      logrus.<span style="color:#50fa7b">WithError</span>(err).<span style="color:#50fa7b">WithField</span>(<span style="color:#f1fa8c">&#34;container&#34;</span>, container.ID).<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;Error sending stop (signal %d) to container&#34;</span>, stopSignal)
+   }
+   <span style="color:#ff79c6">if</span> seconds &lt; <span style="color:#bd93f9">0</span> {
+      <span style="color:#6272a4">// if the client requested that we never kill / wait forever, but container.Wait was still
+</span><span style="color:#6272a4"></span>      <span style="color:#6272a4">// interrupted (parent context cancelled, for example), we should propagate the signal failure
+</span><span style="color:#6272a4"></span>      <span style="color:#ff79c6">return</span> err
+   }
+
+   logrus.<span style="color:#50fa7b">WithField</span>(<span style="color:#f1fa8c">&#34;container&#34;</span>, container.ID).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;Container failed to exit within %s of signal %d - using the force&#34;</span>, wait, stopSignal)
+   <span style="color:#6272a4">// Stop either failed or container didnt exit, so fallback to kill.
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> daemon.<span style="color:#50fa7b">Kill</span>(container); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      <span style="color:#6272a4">// got a kill error, but give container 2 more seconds to exit just in case
+</span><span style="color:#6272a4"></span>      subCtx, cancel <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">WithTimeout</span>(ctx, <span style="color:#bd93f9">2</span><span style="color:#ff79c6">*</span>time.Second)
+      <span style="color:#ff79c6">defer</span> <span style="color:#50fa7b">cancel</span>()
+      <span style="color:#ff79c6">if</span> status <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>container.<span style="color:#50fa7b">Wait</span>(subCtx, containerpkg.WaitConditionNotRunning); status.<span style="color:#50fa7b">Err</span>() <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+         <span style="color:#6272a4">// container did exit, so ignore error and return
+</span><span style="color:#6272a4"></span>         <span style="color:#ff79c6">return</span> <span style="color:#50fa7b">success</span>()
+      }
+      logrus.<span style="color:#50fa7b">WithError</span>(err).<span style="color:#50fa7b">WithField</span>(<span style="color:#f1fa8c">&#34;container&#34;</span>, container.ID).<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;Error killing the container&#34;</span>)
+      <span style="color:#ff79c6">return</span> err
+   }
+
+   <span style="color:#ff79c6">return</span> <span style="color:#50fa7b">success</span>()
+}
+</code></pre></div><p>从这两个函数可以清楚的看到删除一个 container 的具体实现。首先会发一个 SIGTERM(15) 给 Container 中的 Init ProcessId。然后等待这个进程是否退出（正常情况下，这个时间就是 gracefulShutdown 的时间），如果退出了，就返回成功。如果失败了，则发送 SIGKILL(9) 命令，强制杀掉这个进程。</p>
+<p>对于 SIGTERM 信号，如果程序中没有处理这个信号的话，则会使用系统内核自定义的处理函数，默认会杀掉该进程；如果程序处理了这个信号，及重写了处理函数，则会按照重写的处理函数处理该信号。</p>
+<p>此外在 kubelet 中有一个 statusManager 在监控这个 POD 的状态。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>manager) <span style="color:#50fa7b">Start</span>() {
+   syncTicker <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Tick</span>(syncPeriod)
+   <span style="color:#6272a4">// syncPod and syncBatch share the same go routine to avoid sync races.
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">go</span> wait.<span style="color:#50fa7b">Forever</span>(<span style="color:#8be9fd;font-style:italic">func</span>() {
+      <span style="color:#ff79c6">for</span> {
+         <span style="color:#ff79c6">select</span> {
+         <span style="color:#ff79c6">case</span> syncRequest <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>m.podStatusChannel:
+            klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">5</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Status Manager: syncing pod with status from podStatusChannel&#34;</span>,
+               <span style="color:#f1fa8c">&#34;podUID&#34;</span>, syncRequest.podUID,
+               <span style="color:#f1fa8c">&#34;statusVersion&#34;</span>, syncRequest.status.version,
+               <span style="color:#f1fa8c">&#34;status&#34;</span>, syncRequest.status.status)
+            m.<span style="color:#50fa7b">syncPod</span>(syncRequest.podUID, syncRequest.status)
+         <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>syncTicker:
+            klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">5</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Status Manager: syncing batch&#34;</span>)
+            <span style="color:#6272a4">// remove any entries in the status channel since the batch will handle them
+</span><span style="color:#6272a4"></span>            <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">len</span>(m.podStatusChannel); i &gt; <span style="color:#bd93f9">0</span>; i<span style="color:#ff79c6">--</span> {
+               <span style="color:#ff79c6">&lt;-</span>m.podStatusChannel
+            }
+            m.<span style="color:#50fa7b">syncBatch</span>()
+         }
+      }
+   }, <span style="color:#bd93f9">0</span>)
+}
+
+<span style="color:#6272a4">// syncPod syncs the given status with the API server. The caller must not hold the lock.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>manager) <span style="color:#50fa7b">syncPod</span>(uid types.UID, status versionedPodStatus) {
+   <span style="color:#6272a4">// We don&#39;t handle graceful deletion of mirror pods.
+</span><span style="color:#6272a4"></span>   <span style="color:#ff79c6">if</span> m.<span style="color:#50fa7b">canBeDeleted</span>(pod, status.status) {
+      deleteOptions <span style="color:#ff79c6">:=</span> metav1.DeleteOptions{
+         GracePeriodSeconds: <span style="color:#8be9fd;font-style:italic">new</span>(<span style="color:#8be9fd">int64</span>),
+         <span style="color:#6272a4">// Use the pod UID as the precondition for deletion to prevent deleting a
+</span><span style="color:#6272a4"></span>         <span style="color:#6272a4">// newly created pod with the same name and namespace.
+</span><span style="color:#6272a4"></span>         Preconditions: metav1.<span style="color:#50fa7b">NewUIDPreconditions</span>(<span style="color:#8be9fd;font-style:italic">string</span>(pod.UID)),
+      }
+      err = m.kubeClient.<span style="color:#50fa7b">CoreV1</span>().<span style="color:#50fa7b">Pods</span>(pod.Namespace).<span style="color:#50fa7b">Delete</span>(context.<span style="color:#50fa7b">TODO</span>(), pod.Name, deleteOptions)
+      <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+         klog.<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Failed to delete status for pod&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;err&#34;</span>, err)
+         <span style="color:#ff79c6">return</span>
+      }
+      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod fully terminated and removed from etcd&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod))
+      m.<span style="color:#50fa7b">deletePodStatus</span>(uid)
+   }
+}
+</code></pre></div><p>看到这个函数中，会调用 canBeDeleted 方法判断是否可以删除 POD，如果条件满足，则调用 DELETE 接口去删除这个 POD（这里不在 gracefulShutdown)。此时 APIServer 会在 ETCD 中立即删除 POD 资源。</p>
+<p>下面看下 canBeDeleted 方法和内部调用方法 PodResourcesAreReclaimed 的实现：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>manager) <span style="color:#50fa7b">canBeDeleted</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, status v1.PodStatus) <span style="color:#8be9fd">bool</span> {
+   <span style="color:#ff79c6">if</span> pod.DeletionTimestamp <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> <span style="color:#ff79c6">||</span> kubetypes.<span style="color:#50fa7b">IsMirrorPod</span>(pod) {
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+   }
+   <span style="color:#ff79c6">return</span> m.podDeletionSafety.<span style="color:#50fa7b">PodResourcesAreReclaimed</span>(pod, status)
+}
+
+<span style="color:#6272a4">// PodResourcesAreReclaimed returns true if all required node-level resources that a pod was consuming have
+</span><span style="color:#6272a4">// been reclaimed by the kubelet.  Reclaiming resources is a prerequisite to deleting a pod from the API server.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (kl <span style="color:#ff79c6">*</span>Kubelet) <span style="color:#50fa7b">PodResourcesAreReclaimed</span>(pod <span style="color:#ff79c6">*</span>v1.Pod, status v1.PodStatus) <span style="color:#8be9fd">bool</span> {
+   <span style="color:#ff79c6">if</span> !<span style="color:#50fa7b">notRunning</span>(status.ContainerStatuses) {
+      <span style="color:#6272a4">// We shouldn&#39;t delete pods that still have running containers
+</span><span style="color:#6272a4"></span>      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod is terminated, but some containers are still running&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod))
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+   }
+   <span style="color:#6272a4">// pod&#39;s containers should be deleted
+</span><span style="color:#6272a4"></span>   runtimeStatus, err <span style="color:#ff79c6">:=</span> kl.podCache.<span style="color:#50fa7b">Get</span>(pod.UID)
+   <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod is terminated, Error getting runtimeStatus from the podCache&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;err&#34;</span>, err)
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+   }
+   <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(runtimeStatus.ContainerStatuses) &gt; <span style="color:#bd93f9">0</span> {
+      <span style="color:#8be9fd;font-style:italic">var</span> statusStr <span style="color:#8be9fd">string</span>
+      <span style="color:#ff79c6">for</span> _, status <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> runtimeStatus.ContainerStatuses {
+         statusStr <span style="color:#ff79c6">+=</span> fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%+v &#34;</span>, <span style="color:#ff79c6">*</span>status)
+      }
+      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod is terminated, but some containers have not been cleaned up&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod), <span style="color:#f1fa8c">&#34;status&#34;</span>, statusStr)
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+   }
+   <span style="color:#ff79c6">if</span> kl.<span style="color:#50fa7b">podVolumesExist</span>(pod.UID) <span style="color:#ff79c6">&amp;&amp;</span> !kl.keepTerminatedPodVolumes {
+      <span style="color:#6272a4">// We shouldn&#39;t delete pods whose volumes have not been cleaned up if we are not keeping terminated pod volumes
+</span><span style="color:#6272a4"></span>      klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod is terminated, but some volumes have not been cleaned up&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod))
+      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+   }
+   <span style="color:#ff79c6">if</span> kl.kubeletConfiguration.CgroupsPerQOS {
+      pcm <span style="color:#ff79c6">:=</span> kl.containerManager.<span style="color:#50fa7b">NewPodContainerManager</span>()
+      <span style="color:#ff79c6">if</span> pcm.<span style="color:#50fa7b">Exists</span>(pod) {
+         klog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">3</span>).<span style="color:#50fa7b">InfoS</span>(<span style="color:#f1fa8c">&#34;Pod is terminated, but pod cgroup sandbox has not been cleaned up&#34;</span>, <span style="color:#f1fa8c">&#34;pod&#34;</span>, klog.<span style="color:#50fa7b">KObj</span>(pod))
+         <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
+      }
+   }
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">true</span>
+}
+</code></pre></div><p>这个函数则是检查 pod 的相关资源是否被删除，POD 具备删除的条件。</p>
+<p>所以看来下，graceful DELETE 一个 pod 的具体流程则是：cli 发起 graceful DELETE 操作 -&gt; apiserver 更新 Pod 信息 -&gt; kubelet 收到 update 事件，并优雅的杀死 Pod，并释放 Pod 资源 -&gt; kubelet 请求立即删除 Pod -&gt; apiserver 在 ETCD 中删除 Pod -&gt; kubelet 最终 Pod 的资源清除。</p>
+<h2 id="总结">总结</h2>
+<p>之前我的理解都是 K8s 发送的 SIGTERM 和 SIGKILL 信号去删除 Container 的，但是这次详细分析下来，原来最终发送信号的是 CRI 的实现者。而且个人对 LINUX 的信号处理的机制，并不是太了解，通过这次又重新补了一下这部分知识。另外真实的发现，带着问题去看源码的话，效率会高一点。</p>
+<h2 id="参考">参考</h2>
+<p><a href="https://segmentfault.com/a/1190000039062777">Pod 删除流程</a>
+<a href="https://juejin.cn/post/6844903842321039368">Kubernetes源码分析之Pod的删除</a></p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2021/08/golang-memory-optimize/" data-toggle="tooltip" data-placement="top" title="Golang 内存优化">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2022/05/kafka-go_analysis/" data-toggle="tooltip" data-placement="top" title="基于 kafka-go 的微服务的 Stop the World 分析">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

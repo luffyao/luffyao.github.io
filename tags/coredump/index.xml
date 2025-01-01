@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Coredump on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/coredump/</link>
+    <description>Recent content in Coredump on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Mon, 02 Dec 2019 21:35:01 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/coredump/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>如何在 pod 中的 container 里面生成 coredump 文件并拷贝出来使用 GDB debug</title>
+      <link>https://luffyao.github.io/2019/12/how-_to_copy_coredump_in_the_container/</link>
+      <pubDate>Mon, 02 Dec 2019 21:35:01 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/how-_to_copy_coredump_in_the_container/</guid>
+      <description>前言 为什么会记录这篇文章呢，是因为在工作中，遇到了这个问题，由于我们这个是 C++写的代码，crash tracing 并没有 golang 好，所以代码 crash 在 pod 中的 container 里面，</description>
+    </item>
+    
+  </channel>
+</rss>

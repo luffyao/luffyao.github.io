@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>mTLS on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/mtls/</link>
+    <description>Recent content in mTLS on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Fri, 10 Jan 2020 16:51:03 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/mtls/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>istio 配置 mtls</title>
+      <link>https://luffyao.github.io/2020/01/config_mtls_in_istio/</link>
+      <pubDate>Fri, 10 Jan 2020 16:51:03 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/01/config_mtls_in_istio/</guid>
+      <description>ISTIO MTLS SUMMARY THIS IS BASED ON ISTIO OFFICIAL PACKAGE ISTIO-1.3.5(FOLLOWING ALL OF ISTIO DOCS MUST OVER THE WALL,YOU CAN REFERENCE THE LATEST VERDION DOCS), BECAUSE OUR ENV VERSION IS BASED ON THIS VERSION. Test Flow TODO Update MeshPolicy from PERMISSIVE to STRICT NOTE: More infor about this in our ENV, please look at following Question section Q2 Reference link MutlalTls-Mode kubectl get meshpolicy kubectl edit meshpolicy ///// then manually</description>
+    </item>
+    
+  </channel>
+</rss>

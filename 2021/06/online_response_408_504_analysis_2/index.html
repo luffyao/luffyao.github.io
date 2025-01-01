@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="为什么会出现随机 504，408 错误代码？（二）" />
+    <meta property="og:title" content="为什么会出现随机 504，408 错误代码？（二）" />
+    <meta property="twitter:title" content="为什么会出现随机 504，408 错误代码？（二）" />
+    
+
+    
+    <meta name="description" content="记录一次系统测试人员测试 Server 端断网，微服务应该回复 500 错误代码给请求端，而不是随机 504，408 错误代码的分析。">
+    <meta property="og:description" content="记录一次系统测试人员测试 Server 端断网，微服务应该回复 500 错误代码给请求端，而不是随机 504，408 错误代码的分析。" />
+    <meta property="twitter:description" content="记录一次系统测试人员测试 Server 端断网，微服务应该回复 500 错误代码给请求端，而不是随机 504，408 错误代码的分析。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="istio,envoy">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>为什么会出现随机 504，408 错误代码？（二） | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2021/06/online_response_408_504_analysis_2/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/istio" title="Istio">
+                            Istio
+                        </a>
+                        
+                        <a class="tag" href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                    </div>
+                    <h1>为什么会出现随机 504，408 错误代码？（二）</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Friday, June 4, 2021
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <ul>
+<li>
+<p><a href="https://luffyao.github.io/2021/06/online_response_408_504_analysis_1/">为什么会出现随机 504，408 错误代码？（一）</a></p>
+</li>
+<li>
+<p>为什么会出现随机 504，408 错误代码？（二）</p>
+</li>
+</ul>
+<h2 id="问题描述">问题描述</h2>
+<p>在第一篇中讲述了这个问题的具体描述，这里不再赘述。由于这个问题比较复杂，在第一篇中分析出了，我们的 golang 程序编写存在问题，在 server 端断网的情况下，没有做特殊处理，导致 TCP 的发送缓冲区满了，进而导致死锁的情况。但是由于我们前面有 istio gateway，并且设置了 timeout 为 7s 钟，所以当请求在程序中死锁的情况下，最终会导致 istio timeout。所以这里会导致返回 <code>504 gateway timeout</code> 的情况，在这种情况下，回复 504 是期望的，但是回复 <code>408 request time</code>，这里就有些疑问了。这篇将分析为什么 istio 会随机回复 408 的情况。</p>
+<p>这里我们用的 istio 基于 1.8 的版本。</p>
+<h2 id="问题复现">问题复现</h2>
+<p>这里复现则比较简单了，因为我们知道了程序异常的条件是死锁了，于是我在程序中直接 sleep 一段时间（大于在 VS 里面设置的 timeout 值），这样就可以复现问题。果然，当我用 h2load 通过 istio gateway 发送请求时，就会出现线上的问题，istio 回复了 408，504 的错误代码。这里其实为了对比，我还直接向服务发请求，这个时候，和之前的测试是一样的结果，并没有什么错误代码回复。从而可以肯定是 istio gateway 出现了问题。</p>
+<h2 id="问题分析">问题分析</h2>
+<p>这里分析起来还是挺难的，毕竟涉及到了 istio 的处理，开始没什么头绪，然后咨询了一些人，刚好有个朋友有过类似的问题，他提出了 envoy 的 max_stream_duration 的参数，后来我在 envoy 代码里面看到这部分的处理，看到这种情况下这个时间超时的处理，正是回复 <code>408 downstream request timeout</code>，和我们这个情况很类似，于是这给我了一个分析方向，从结果看，这也是个正确的方向。</p>
+<p>既然知道和 envoy 这个 max_stream_duration 字段值有关，于是，首先我通过 <code>istioctl pc route</code> 查看了我本地环境上的 service 的 route 配置信息，看到我们的配置是 maxStreamDuration 和 timeout 设置的是同一个值，这和我们的期望很显然不符，因为我们根本没有设置 maxStreamDuration 这个值，并且 istio 也没有提供某个字段可以设置这个值。</p>
+<p>结合 istio 的 route 配置看到对应的参数值，然后看了下对应版本 envoy 这部分的处理 <code>onStreamMaxDurationReached</code>，源码在 <code>source/common/http/conn_manager_impl.cc</code> 文件下，它则是根据这些配置开启不同的 timer，如果 expire 了，则回复对应的错误代码，而对于 stream 超时的情况，则回复 408，对于 timeout 超时，则回复 504。</p>
+<p>从这里我试着猜想了一下，如果当我把 max_stream_duration 的值设置小于 timeout，按照 envoy 逻辑，则会全部回复 408；当大于 timeout 的时候，则会全部回复 504。然后我试着去修改这个 maxStreamDuration 的值，去测试我的猜测。</p>
+<p>我通过 envoyfilter 去修改这个参数，例如下面内容，这是修改 max_stream_duration 为 100s，去模拟大于 timeout 的情况。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
+<span style="color:#ff79c6">kind</span>: EnvoyFilter
+<span style="color:#ff79c6">metadata</span>:
+  <span style="color:#ff79c6">name</span>: testenvoyfilter
+  <span style="color:#ff79c6">namespace</span>: default
+<span style="color:#ff79c6">spec</span>:
+  <span style="color:#ff79c6">workloadSelector</span>:
+    <span style="color:#ff79c6">labels</span>:
+      <span style="color:#ff79c6">app</span>: istio-ingressgateway
+  <span style="color:#ff79c6">configPatches</span>:
+    - <span style="color:#ff79c6">applyTo</span>: HTTP_ROUTE
+      <span style="color:#ff79c6">match</span>:
+        <span style="color:#ff79c6">context</span>: ANY
+        <span style="color:#ff79c6">routeConfiguration</span>:
+          <span style="color:#ff79c6">vhost</span>:
+            <span style="color:#ff79c6">name</span>: <span style="color:#f1fa8c">&#34;*:8082&#34;</span>
+            <span style="color:#ff79c6">route</span>:
+              <span style="color:#ff79c6">action</span>: ANY
+      <span style="color:#ff79c6">patch</span>:
+        <span style="color:#ff79c6">operation</span>: MERGE
+        <span style="color:#ff79c6">value</span>:
+          <span style="color:#ff79c6">route</span>: 
+            <span style="color:#ff79c6">timeout</span>: 7s
+            <span style="color:#ff79c6">max_stream_duration</span>:
+              <span style="color:#ff79c6">max_stream_duration</span>: 100s
+</code></pre></div><p>经过设置不同的值，测试结果和我的猜想完全符合。于是可以断定，这个 408 的原因，就是这个 max_stream_duration 所致。</p>
+<p>那为什么 istio 会自己给我们添加这个值呢，并且还是等于 timeout 的值。</p>
+<p>这里可以看一下对应的提交。首先我们可以看到 istio 的这个提交 <a href="https://github.com/istio/istio/pull/31575">set max stream duration to the value specified in VS</a>，它将 MaxStreamDuration 设置成了 Timeout 的值，所以这里也能够解释上面我环境里的问题，为什么我没有设置这个值，但是 istio 的 route 配置数据里面是有的，并且和 Timeout 的值是一样的。</p>
+<p>但是他们后来测试发现了问题 <a href="https://github.com/istio/istio/issues/31616">Regression: istio.io egress test case gets 408 instead of 504</a>，于是做了一轮讨论下来，发现有问题，最后他们又把这个部分 revert 了，可以参考这个提交 <a href="https://github.com/istio/istio/pull/32139">remove max stream duration</a>。</p>
+<p>这其中 istio 的人去 envoy 搞了个 PR <a href="https://github.com/envoyproxy/envoy/pull/15585#issuecomment-824155470">honour routes timeout if max stream duration is set with out stream duration</a>，但最后分析下来，这个是不对的，又将其 revert 出来了，参考这个提交 <a href="https://github.com/envoyproxy/envoy/pull/16133">Revert &ldquo;honour routes timeout if max stream duration is set with out …</a>。</p>
+<p>总之，他们对这个折腾了一番，然后 istio 觉得还是不设置 MaxStreamDuration 这个值。然后再 1.10 版本修复这个问题，具体可参考这个提交 <a href="https://github.com/istio/istio/pull/32426">[release-1.10] revert to use deprecated values for timeouts</a>。</p>
+<h2 id="解决方案">解决方案</h2>
+<p>目前没有什么好的解决方案，因为我们不想因为这个问题，用 envoyfilter 去修改这个值，而 istio 对于这个问题会在 1.10 版本才会修复。所以看后面我们自己的 mesh 同志们会怎么处理。</p>
+<h2 id="总结">总结</h2>
+<p>对于这个问题，其实分析起来还是有点困难的，因为一般想不到那方面去，并且，我们这边对 mesh 也不是太了解。这次分析也是朋友提供了很有用的信息，才能朝着这个方向分析了下来。不然毫无可能怀疑到这上面来，更不能顺利找到这个问题的根本。</p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2021/06/online_response_408_504_analysis_1/" data-toggle="tooltip" data-placement="top" title="为什么会出现随机 504，408 错误代码？（一）">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2021/08/golang-memory-optimize/" data-toggle="tooltip" data-placement="top" title="Golang 内存优化">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

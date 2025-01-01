@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="client-go 之 WorkQueue 篇" />
+    <meta property="og:title" content="client-go 之 WorkQueue 篇" />
+    <meta property="twitter:title" content="client-go 之 WorkQueue 篇" />
+    
+
+    
+    <meta name="description" content="client-go 中不同 WorkQueue 的源码分析及默认支持的 Rate Limiter 的介绍">
+    <meta property="og:description" content="client-go 中不同 WorkQueue 的源码分析及默认支持的 Rate Limiter 的介绍" />
+    <meta property="twitter:description" content="client-go 中不同 WorkQueue 的源码分析及默认支持的 Rate Limiter 的介绍" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="Kubernetes,client-go,informer">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>client-go 之 WorkQueue 篇 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2020/09/clientgoworkqueue/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/kubernetes" title="Kubernetes">
+                            Kubernetes
+                        </a>
+                        
+                        <a class="tag" href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                    </div>
+                    <h1>client-go 之 WorkQueue 篇</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Sunday, September 6, 2020
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="client-go-源码学习系列">client-go 源码学习系列：</h2>
+<ul>
+<li><a href="https://luffyao.github.io/2020/08/clientgooverall/">client-go 之概述篇</a></li>
+<li><a href="https://luffyao.github.io/2020/10/clientgoinformer/">client-go 之 Informer 篇</a></li>
+<li>client-go 之 WorkQueue 篇</li>
+</ul>
+<h2 id="前言">前言</h2>
+<p>在第一篇的概述中，我给大家展示过一张来自官方的 Informer 的处理流程图，在第二篇中，主要和大家介绍并分析了 client-go 中的 Informer 机制及具体实现，即处理流程图中 client-go 的部分，而本篇中主要讲述的是在 Custom Controller 中的 WorkQueue 部分。其实对于这部分，并不是必不可少的，因为使用者完全可以不使用 WorkQueue，而是收到分发的事件，直接进行逻辑的处理，但是这种做法，个人觉得不是很提倡这样使用，因为直接处理的话，会是的整个的 Informer 的事件处理能力下降，从而导致事件的积累，从而导致不可预知的问题。对于使用 WorkQueue 的用户，client-go 中提供了延时队列及速率限制队列对使用者进行保护。而这篇文章则是和大家分析下 client-go 中 WorkQueue 的不同实现。从而在使用的时候，可以选择合适自己的队列实现方式。</p>
+<h2 id="workqueue-概述">WorkQueue 概述</h2>
+<p>上篇 client-go 中简单的描述过，client-go 中提供了三种队列的接口</p>
+<ul>
+<li>
+<p><code>Interface</code>: FIFO 队列接口，并支持去重处理。</p>
+</li>
+<li>
+<p><code>DelayingInterface</code>: 延迟队列接口，基于 <code>Interface</code> 接口封装。</p>
+</li>
+<li>
+<p><code>RateLimitingInterface</code>: 速率限制接口，基于 <code>DelayingInterface</code> 接口封装。</p>
+</li>
+</ul>
+<p>三者直接的类图如下：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599376340/kubernetes/client-go/workqueue_zc2urt.png" alt="&amp;ldquo;workqueue&amp;rdquo;">
+
+</p>
+<h2 id="底层的-fifo-队列">底层的 FIFO 队列</h2>
+<p>首先是底层的 FIFO 队列的实现。</p>
+<p>下面给出具体的定义</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> Interface <span style="color:#8be9fd;font-style:italic">interface</span> {
+    <span style="color:#50fa7b">Add</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{})
+    <span style="color:#50fa7b">Len</span>() <span style="color:#8be9fd">int</span>
+    <span style="color:#50fa7b">Get</span>() (item <span style="color:#8be9fd;font-style:italic">interface</span>{}, shutdown <span style="color:#8be9fd">bool</span>)
+    <span style="color:#50fa7b">Done</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{})
+    <span style="color:#50fa7b">ShutDown</span>()
+    <span style="color:#50fa7b">ShuttingDown</span>() <span style="color:#8be9fd">bool</span>
+}
+
+<span style="color:#6272a4">// Type is a work queue (see the package comment).
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> Type <span style="color:#8be9fd;font-style:italic">struct</span> {
+    <span style="color:#6272a4">// queue defines the order in which we will work on items. Every
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// element of queue should be in the dirty set and not in the
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// processing set.
+</span><span style="color:#6272a4"></span>    queue []t
+
+    <span style="color:#6272a4">// dirty defines all of the items that need to be processed.
+</span><span style="color:#6272a4"></span>    dirty set
+
+    <span style="color:#6272a4">// Things that are currently being processed are in the processing set.
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// These things may be simultaneously in the dirty set. When we finish
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// processing something and remove it from this set, we&#39;ll check if
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// it&#39;s in the dirty set, and if so, add it to the queue.
+</span><span style="color:#6272a4"></span>    processing set
+
+    cond <span style="color:#ff79c6">*</span>sync.Cond
+
+    shuttingDown <span style="color:#8be9fd">bool</span>
+
+    metrics queueMetrics
+
+    unfinishedWorkUpdatePeriod time.Duration
+    clock                      clock.Clock
+}
+
+<span style="color:#8be9fd;font-style:italic">type</span> empty <span style="color:#8be9fd;font-style:italic">struct</span>{}
+<span style="color:#8be9fd;font-style:italic">type</span> t <span style="color:#8be9fd;font-style:italic">interface</span>{}
+<span style="color:#8be9fd;font-style:italic">type</span> set <span style="color:#8be9fd;font-style:italic">map</span>[t]empty
+</code></pre></div><p>这里定义了一个 Interface 接口，提供了几种方法。然后 <code>Type</code> 结构实现了 Interface 接口。所以这里的 <code>Type</code> 结构是一个底层的 FIFO 队列的实现。</p>
+<p>从 <code>Type</code> 结构体中我们可以看到定义了三个集合，<code>queue</code> 是一个值为 interface 类型的 slice，<code>ditry</code> 是一个 key 为 interface 类型的 map，<code>processing</code> 一个是 key 为 interface 类型的 map。 而这个 FIFO 队列就是通过这三个属性实现了数据处理逻辑。下面我们将分析不同方法对应的这三个属性之间数据转换来理解 FIFO 队列的实现。</p>
+<h3 id="add-方法实现逻辑">Add 方法实现逻辑</h3>
+<p>这里我们先分析 Add 方法的实现逻辑。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// Add marks item as needing processing.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>Type) <span style="color:#50fa7b">Add</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) {
+    q.cond.L.<span style="color:#50fa7b">Lock</span>()
+    <span style="color:#ff79c6">defer</span> q.cond.L.<span style="color:#50fa7b">Unlock</span>()
+    <span style="color:#ff79c6">if</span> q.shuttingDown {
+        <span style="color:#ff79c6">return</span>
+    }
+    <span style="color:#ff79c6">if</span> q.dirty.<span style="color:#50fa7b">has</span>(item) {
+        <span style="color:#ff79c6">return</span>
+    }
+
+    q.metrics.<span style="color:#50fa7b">add</span>(item)
+
+    q.dirty.<span style="color:#50fa7b">insert</span>(item)
+    <span style="color:#ff79c6">if</span> q.processing.<span style="color:#50fa7b">has</span>(item) {
+        <span style="color:#ff79c6">return</span>
+    }
+
+    q.queue = <span style="color:#8be9fd;font-style:italic">append</span>(q.queue, item)
+    q.cond.<span style="color:#50fa7b">Signal</span>()
+}
+</code></pre></div><p>Add 方法基本分为一下三步：</p>
+<ul>
+<li>
+<p>判断 dirty 中是否存在 item，如果存在则返回，如果不存在则执行下一步。</p>
+</li>
+<li>
+<p>将 item 插入 dirty 中，再判断 item 是否在 processing 中，如果存在则返回，否则执行下一步。</p>
+</li>
+<li>
+<p>将 item 追加到 queue 中。</p>
+</li>
+</ul>
+<p>下面给出一个示例图可供参考：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599391131/kubernetes/client-go/basicqueueadd_vo4xld.png" alt="&amp;ldquo;BasicQueueAdd&amp;rdquo;">
+
+</p>
+<h3 id="get-方法实现逻辑">Get 方法实现逻辑</h3>
+<p>这里我们再来看看 Get 方法。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// Get blocks until it can return an item to be processed. If shutdown = true,
+</span><span style="color:#6272a4">// the caller should end their goroutine. You must call Done with item when you
+</span><span style="color:#6272a4">// have finished processing it.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>Type) <span style="color:#50fa7b">Get</span>() (item <span style="color:#8be9fd;font-style:italic">interface</span>{}, shutdown <span style="color:#8be9fd">bool</span>) {
+    q.cond.L.<span style="color:#50fa7b">Lock</span>()
+    <span style="color:#ff79c6">defer</span> q.cond.L.<span style="color:#50fa7b">Unlock</span>()
+    <span style="color:#ff79c6">for</span> <span style="color:#8be9fd;font-style:italic">len</span>(q.queue) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> <span style="color:#ff79c6">&amp;&amp;</span> !q.shuttingDown {
+        q.cond.<span style="color:#50fa7b">Wait</span>()
+    }
+    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(q.queue) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
+        <span style="color:#6272a4">// We must be shutting down.
+</span><span style="color:#6272a4"></span>        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">true</span>
+    }
+
+    item, q.queue = q.queue[<span style="color:#bd93f9">0</span>], q.queue[<span style="color:#bd93f9">1</span>:]
+
+    q.metrics.<span style="color:#50fa7b">get</span>(item)
+
+    q.processing.<span style="color:#50fa7b">insert</span>(item)
+    q.dirty.<span style="color:#8be9fd;font-style:italic">delete</span>(item)
+
+    <span style="color:#ff79c6">return</span> item, <span style="color:#ff79c6">false</span>
+}
+</code></pre></div><p>这里可以看到</p>
+<ul>
+<li>
+<p>如果 queue 中没有 item，则会一直等待在这里，</p>
+</li>
+<li>
+<p>而如果有事件过来，但是 queue 还是空，则会返回，并会设置 shutting down 标志，</p>
+</li>
+<li>
+<p>而如果 queue 中有元素，则取出 queue 中的第一个元素并从 queue 中删除，然后再插入到 processing 中，最后将该元素从 dirty 中删除。</p>
+</li>
+</ul>
+<p>下面给出一个示例图可供参考：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599391131/kubernetes/client-go/basicqueueget_sklglv.png" alt="&amp;ldquo;BasicQueueGet&amp;rdquo;">
+
+</p>
+<h3 id="done-方法实现逻辑">Done 方法实现逻辑</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// Done marks item as done processing, and if it has been marked as dirty again
+</span><span style="color:#6272a4">// while it was being processed, it will be re-added to the queue for
+</span><span style="color:#6272a4">// re-processing.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>Type) <span style="color:#50fa7b">Done</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) {
+    q.cond.L.<span style="color:#50fa7b">Lock</span>()
+    <span style="color:#ff79c6">defer</span> q.cond.L.<span style="color:#50fa7b">Unlock</span>()
+
+    q.metrics.<span style="color:#50fa7b">done</span>(item)
+
+    q.processing.<span style="color:#8be9fd;font-style:italic">delete</span>(item)
+    <span style="color:#ff79c6">if</span> q.dirty.<span style="color:#50fa7b">has</span>(item) {
+        q.queue = <span style="color:#8be9fd;font-style:italic">append</span>(q.queue, item)
+        q.cond.<span style="color:#50fa7b">Signal</span>()
+    }
+}
+</code></pre></div><p>这里 Done 方法比较简单。</p>
+<ul>
+<li>
+<p>将 item 从 processing 中删除</p>
+</li>
+<li>
+<p>判断 item 是否存在 dirty 中，如果存在，则叫 item 追加到 queue 中。</p>
+</li>
+</ul>
+<p>而这里为什么会判断 dirty 中含有该 item，是因为在 Get 方法和 Done 方法之间不是原子操作，所以 item 有可能在这之间被 Add 进 dirty 中。</p>
+<p>下面给出一个示例图可供参考：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599391131/kubernetes/client-go/basicqueuedone_pcgyve.png" alt="&amp;ldquo;BasicQueueDone&amp;rdquo;">
+
+</p>
+<h2 id="delaying-队列">Delaying 队列</h2>
+<p><code>DelayingInterface</code> 是一个 Interface 并且添加了 <code>AddAfter</code> 方法。并且我们可以看到在创建 <code>DelayingQueue</code> 的时候，是创建了一个底层的 FIFO 的。并异步调用了个 ret.waitingLoop()。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// DelayingInterface is an Interface that can Add an item at a later time. This makes it easier to
+</span><span style="color:#6272a4">// requeue items after failures without ending up in a hot-loop.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> DelayingInterface <span style="color:#8be9fd;font-style:italic">interface</span> {
+    Interface
+    <span style="color:#6272a4">// AddAfter adds an item to the workqueue after the indicated duration has passed
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">AddAfter</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}, duration time.Duration)
+}
+
+<span style="color:#6272a4">// NewDelayingQueueWithCustomClock constructs a new named workqueue
+</span><span style="color:#6272a4">// with ability to inject real or fake clock for testing purposes
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewDelayingQueueWithCustomClock</span>(clock clock.Clock, name <span style="color:#8be9fd">string</span>) DelayingInterface {
+    ret <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>delayingType{
+        Interface:       <span style="color:#50fa7b">NewNamed</span>(name),
+        clock:           clock,
+        heartbeat:       clock.<span style="color:#50fa7b">NewTicker</span>(maxWait),
+        stopCh:          <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">struct</span>{}),
+        waitingForAddCh: <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>waitFor, <span style="color:#bd93f9">1000</span>),
+        metrics:         <span style="color:#50fa7b">newRetryMetrics</span>(name),
+    }
+
+    <span style="color:#ff79c6">go</span> ret.<span style="color:#50fa7b">waitingLoop</span>()
+
+    <span style="color:#ff79c6">return</span> ret
+}
+
+</code></pre></div><p>我们先来看看 <code>waitingLoop()</code> 函数的实现。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// waitingLoop runs until the workqueue is shutdown and keeps a check on the list of items to be added.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>delayingType) <span style="color:#50fa7b">waitingLoop</span>() {
+    <span style="color:#ff79c6">defer</span> utilruntime.<span style="color:#50fa7b">HandleCrash</span>()
+
+    <span style="color:#6272a4">// Make a placeholder channel to use when there are no items in our list
+</span><span style="color:#6272a4"></span>    never <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#ff79c6">&lt;-</span><span style="color:#8be9fd;font-style:italic">chan</span> time.Time)
+
+    <span style="color:#6272a4">// Make a timer that expires when the item at the head of the waiting queue is ready
+</span><span style="color:#6272a4"></span>    <span style="color:#8be9fd;font-style:italic">var</span> nextReadyAtTimer clock.Timer
+
+    waitingForQueue <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>waitForPriorityQueue{}
+    heap.<span style="color:#50fa7b">Init</span>(waitingForQueue)
+
+    waitingEntryByData <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">map</span>[t]<span style="color:#ff79c6">*</span>waitFor{}
+
+    <span style="color:#ff79c6">for</span> {
+        <span style="color:#ff79c6">if</span> q.Interface.<span style="color:#50fa7b">ShuttingDown</span>() {
+            <span style="color:#ff79c6">return</span>
+        }
+
+        now <span style="color:#ff79c6">:=</span> q.clock.<span style="color:#50fa7b">Now</span>()
+
+        <span style="color:#6272a4">// Add ready entries
+</span><span style="color:#6272a4"></span>        <span style="color:#ff79c6">for</span> waitingForQueue.<span style="color:#50fa7b">Len</span>() &gt; <span style="color:#bd93f9">0</span> {
+            entry <span style="color:#ff79c6">:=</span> waitingForQueue.<span style="color:#50fa7b">Peek</span>().(<span style="color:#ff79c6">*</span>waitFor)
+            <span style="color:#ff79c6">if</span> entry.readyAt.<span style="color:#50fa7b">After</span>(now) {
+                <span style="color:#ff79c6">break</span>
+            }
+
+            entry = heap.<span style="color:#50fa7b">Pop</span>(waitingForQueue).(<span style="color:#ff79c6">*</span>waitFor)
+            q.<span style="color:#50fa7b">Add</span>(entry.data)
+            <span style="color:#8be9fd;font-style:italic">delete</span>(waitingEntryByData, entry.data)
+        }
+
+        <span style="color:#6272a4">// Set up a wait for the first item&#39;s readyAt (if one exists)
+</span><span style="color:#6272a4"></span>        nextReadyAt <span style="color:#ff79c6">:=</span> never
+        <span style="color:#ff79c6">if</span> waitingForQueue.<span style="color:#50fa7b">Len</span>() &gt; <span style="color:#bd93f9">0</span> {
+            <span style="color:#ff79c6">if</span> nextReadyAtTimer <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+                nextReadyAtTimer.<span style="color:#50fa7b">Stop</span>()
+            }
+            entry <span style="color:#ff79c6">:=</span> waitingForQueue.<span style="color:#50fa7b">Peek</span>().(<span style="color:#ff79c6">*</span>waitFor)
+            nextReadyAtTimer = q.clock.<span style="color:#50fa7b">NewTimer</span>(entry.readyAt.<span style="color:#50fa7b">Sub</span>(now))
+            nextReadyAt = nextReadyAtTimer.<span style="color:#50fa7b">C</span>()
+        }
+
+        <span style="color:#ff79c6">select</span> {
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>q.stopCh:
+            <span style="color:#ff79c6">return</span>
+
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>q.heartbeat.<span style="color:#50fa7b">C</span>():
+            <span style="color:#6272a4">// continue the loop, which will add ready items
+</span><span style="color:#6272a4"></span>
+        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>nextReadyAt:
+            <span style="color:#6272a4">// continue the loop, which will add ready items
+</span><span style="color:#6272a4"></span>
+        <span style="color:#ff79c6">case</span> waitEntry <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>q.waitingForAddCh:
+            <span style="color:#ff79c6">if</span> waitEntry.readyAt.<span style="color:#50fa7b">After</span>(q.clock.<span style="color:#50fa7b">Now</span>()) {
+                <span style="color:#50fa7b">insert</span>(waitingForQueue, waitingEntryByData, waitEntry)
+            } <span style="color:#ff79c6">else</span> {
+                q.<span style="color:#50fa7b">Add</span>(waitEntry.data)
+            }
+
+            drained <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">false</span>
+            <span style="color:#ff79c6">for</span> !drained {
+                <span style="color:#ff79c6">select</span> {
+                <span style="color:#ff79c6">case</span> waitEntry <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>q.waitingForAddCh:
+                    <span style="color:#ff79c6">if</span> waitEntry.readyAt.<span style="color:#50fa7b">After</span>(q.clock.<span style="color:#50fa7b">Now</span>()) {
+                        <span style="color:#50fa7b">insert</span>(waitingForQueue, waitingEntryByData, waitEntry)
+                    } <span style="color:#ff79c6">else</span> {
+                        q.<span style="color:#50fa7b">Add</span>(waitEntry.data)
+                    }
+                <span style="color:#ff79c6">default</span>:
+                    drained = <span style="color:#ff79c6">true</span>
+                }
+            }
+        }
+    }
+}
+</code></pre></div><p>这个函数则是 Delaying 的主要实现逻辑。从代码中可以看到它通过接受一些 channel 信号，然后进行处理。例如如果 duration 时间到了，则将元素添加到底层的 FIFO queue 中，如果没到则添加到 <code>waitingForQueue</code> 中后续判断处理。等到 duration 时间到了，然后将该元素添加到 FIFO Queue 中。</p>
+<p>我们再来看看 AddAfter 函数的实现。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// AddAfter adds the given item to the work queue after the given delay
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>delayingType) <span style="color:#50fa7b">AddAfter</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}, duration time.Duration) {
+    <span style="color:#6272a4">// don&#39;t add if we&#39;re already shutting down
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">if</span> q.<span style="color:#50fa7b">ShuttingDown</span>() {
+        <span style="color:#ff79c6">return</span>
+    }
+
+    q.metrics.<span style="color:#50fa7b">retry</span>()
+
+    <span style="color:#6272a4">// immediately add things with no delay
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">if</span> duration <span style="color:#ff79c6">&lt;=</span> <span style="color:#bd93f9">0</span> {
+        q.<span style="color:#50fa7b">Add</span>(item)
+        <span style="color:#ff79c6">return</span>
+    }
+
+    <span style="color:#ff79c6">select</span> {
+    <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>q.stopCh:
+        <span style="color:#6272a4">// unblock if ShutDown() is called
+</span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">case</span> q.waitingForAddCh <span style="color:#ff79c6">&lt;-</span> <span style="color:#ff79c6">&amp;</span>waitFor{data: item, readyAt: q.clock.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">Add</span>(duration)}:
+    }
+}
+</code></pre></div><p>这个函数则是添加 item 到 work queue 的函数。这里会对传入的 duration 进行判断，如果<code>duration &lt;= 0</code>，则直接添加到 queue 中，否则将 item 和 duration 一起封装到 waitFor 结构中，并传入 <code>waitingForAddCh</code> 管道中。以触发上面的 waitingLoop 进行处理。</p>
+<p>具体的实现逻辑可参考下图：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599377943/kubernetes/client-go/delayingqueue_m94efl.png" alt="&amp;ldquo;DelayingQueue&amp;rdquo;">
+
+</p>
+<h2 id="rate-limiting-队列">Rate Limiting 队列</h2>
+<p><code>RateLimitingInterface</code> 则是在 <code>DelayingInterface</code> 上再封装了一层。提供了更多的接口。而这些接口都是对于 rate limiter 进行出入，算出 duration 值，并通过调用 <code>DelayingInterface</code> 的 <code>AddAfter</code> 方法将 item 添加到 Queue 中。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// RateLimitingInterface is an interface that rate limits items being added to the queue.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> RateLimitingInterface <span style="color:#8be9fd;font-style:italic">interface</span> {
+    DelayingInterface
+
+    <span style="color:#6272a4">// AddRateLimited adds an item to the workqueue after the rate limiter says it&#39;s ok
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">AddRateLimited</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{})
+
+    <span style="color:#6272a4">// Forget indicates that an item is finished being retried.  Doesn&#39;t matter whether it&#39;s for perm failing
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// or for success, we&#39;ll stop the rate limiter from tracking it.  This only clears the `rateLimiter`, you
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// still have to call `Done` on the queue.
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">Forget</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{})
+
+    <span style="color:#6272a4">// NumRequeues returns back how many times the item was requeued
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">NumRequeues</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) <span style="color:#8be9fd">int</span>
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewNamedRateLimitingQueue</span>(rateLimiter RateLimiter, name <span style="color:#8be9fd">string</span>) RateLimitingInterface {
+    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>rateLimitingType{
+        DelayingInterface: <span style="color:#50fa7b">NewNamedDelayingQueue</span>(name),
+        rateLimiter:       rateLimiter,
+    }
+}
+
+<span style="color:#6272a4">// rateLimitingType wraps an Interface and provides rateLimited re-enquing
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> rateLimitingType <span style="color:#8be9fd;font-style:italic">struct</span> {
+    DelayingInterface
+
+    rateLimiter RateLimiter
+}
+
+<span style="color:#6272a4">// AddRateLimited AddAfter&#39;s the item based on the time when the rate limiter says it&#39;s ok
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>rateLimitingType) <span style="color:#50fa7b">AddRateLimited</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) {
+    q.DelayingInterface.<span style="color:#50fa7b">AddAfter</span>(item, q.rateLimiter.<span style="color:#50fa7b">When</span>(item))
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>rateLimitingType) <span style="color:#50fa7b">NumRequeues</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) <span style="color:#8be9fd">int</span> {
+    <span style="color:#ff79c6">return</span> q.rateLimiter.<span style="color:#50fa7b">NumRequeues</span>(item)
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (q <span style="color:#ff79c6">*</span>rateLimitingType) <span style="color:#50fa7b">Forget</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) {
+    q.rateLimiter.<span style="color:#50fa7b">Forget</span>(item)
+}
+
+</code></pre></div><p>从上面代码可以看出我们在调用 <code>NewNamedRateLimitingQueue</code> 函数创建 <code>RateLimitingQueue</code> 的时候，传入了 RateLimiter 的对象，而 <code>rateLimitingType</code> 的 <code>AddRateLimited</code> 方法中则是调用 <code>DelayingInterface</code> 的 <code>AddAfter</code> 方法，并通过 rateLimiter 计算出来的 duration 传入。而其他两个方法则直接调用 rateLimiter 的方法进行处理。</p>
+<p>从而我们可以分析出，RateLimitingQueue 主要是通过 RateLimiter 接口的具体实现者的逻辑进行处理的。</p>
+<p>具体的实现逻辑可参考下图：</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1599377947/kubernetes/client-go/ratelimitingqueue_twtcgk.png" alt="&amp;ldquo;RateLimitingQueue&amp;rdquo;">
+
+</p>
+<h2 id="ratelimiter-介绍">RateLimiter 介绍</h2>
+<p>从上面 <code>RateLimitingQueue</code> 中我们有说过它的具体实现逻辑是 <code>RateLimiter</code> 的实现者进行的。下面我们来分析下 <code>RateLimiter</code>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> RateLimiter <span style="color:#8be9fd;font-style:italic">interface</span> {
+    <span style="color:#6272a4">// When gets an item and gets to decide how long that item should wait
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">When</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) time.Duration
+    <span style="color:#6272a4">// Forget indicates that an item is finished being retried.  Doesn&#39;t matter whether its for perm failing
+</span><span style="color:#6272a4"></span>    <span style="color:#6272a4">// or for success, we&#39;ll stop tracking it
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">Forget</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{})
+    <span style="color:#6272a4">// NumRequeues returns back how many failures the item has had
+</span><span style="color:#6272a4"></span>    <span style="color:#50fa7b">NumRequeues</span>(item <span style="color:#8be9fd;font-style:italic">interface</span>{}) <span style="color:#8be9fd">int</span>
+}
+</code></pre></div><p>WorkQueue 中提供的默认支持的 RateLimiter:</p>
+<ul>
+<li>BucketRateLimiter</li>
+<li>ItemBucketRateLimiter</li>
+<li>ItemExponentialFailureRateLimiter</li>
+<li>ItemFastSlowRateLimiter</li>
+<li>MaxOfRateLimiter</li>
+</ul>
+<p>对于这些默认提供的 <code>RateLimiter</code>，此处我们就不分析了。它们之间主要不同也就是根据不同的算法算出 duration 的时间，来决定 Item 是什么能够加入队列中，从而实现了速率限制功能。</p>
+<p><strong>NOTE: 由于 RateLimiter 是一个接口类型，所以如果默认支持的 RateLimiter 不能够满足你的需求，你可以通过实现 RateLimiter 的接口来自定义一个速率限制器。</strong></p>
+<h2 id="总结">总结</h2>
+<p>WorkQueue 在 informer 机制中主要是在 Controller 部分的组件，因此当你在阅读 controller-manager 源码的时候将会频繁看到它的使用。因为 WorkQueue 中提供的延时队列和速率限制队列在实际使用中会经常用到。例如速率队列来说，它能够很好的控制调用者的处理速度，防止调用者出现很大的波动，更能够使得调用者不会因为负载太高而处理不过来导致失败。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/kubernetes/kubernetes">kubernetes</a></li>
+<li><a href="https://github.com/kubernetes/client-go">client-go</a></li>
+</ul>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2020/09/migratetohugo/" data-toggle="tooltip" data-placement="top" title="将博客从 Hexo 迁移到 Hugo">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2020/09/designpattern/" data-toggle="tooltip" data-placement="top" title="GoF 23 种设计模式学习总结">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Hugo on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/hugo/</link>
+    <description>Recent content in Hugo on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sun, 06 Sep 2020 11:39:14 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/hugo/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>将博客从 Hexo 迁移到 Hugo</title>
+      <link>https://luffyao.github.io/2020/09/migratetohugo/</link>
+      <pubDate>Sun, 06 Sep 2020 11:39:14 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/09/migratetohugo/</guid>
+      <description>前言 之前博客是使用 Hexo，但是最近接触了 Hugo， 然后对比了下，感觉 Hugo 性能好很多，然后就学习了下 Hugo，将自己的博客迁移到了 Hugo 上了。这篇</description>
+    </item>
+    
+  </channel>
+</rss>

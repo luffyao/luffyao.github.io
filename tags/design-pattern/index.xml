@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Design Pattern on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/design-pattern/</link>
+    <description>Recent content in Design Pattern on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Thu, 10 Sep 2020 14:12:23 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/design-pattern/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>GoF 23 种设计模式学习总结</title>
+      <link>https://luffyao.github.io/2020/09/designpattern/</link>
+      <pubDate>Thu, 10 Sep 2020 14:12:23 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/09/designpattern/</guid>
+      <description>前言 这篇内容主要为面向对象设计和编程及 GoF 设计模式在微服务下面的使用。因此该篇总结不会讲述 GoF 设计模式的基本内容，只会总结面向对象设计的思想和各</description>
+    </item>
+    
+  </channel>
+</rss>

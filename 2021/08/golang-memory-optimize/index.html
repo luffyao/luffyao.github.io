@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="Golang 内存优化" />
+    <meta property="og:title" content="Golang 内存优化" />
+    <meta property="twitter:title" content="Golang 内存优化" />
+    
+
+    
+    <meta name="description" content="golang 内存优化">
+    <meta property="og:description" content="golang 内存优化" />
+    <meta property="twitter:description" content="golang 内存优化" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="golang,profiling,内存优化">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>Golang 内存优化 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2021/08/golang-memory-optimize/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        <a class="tag" href="/tags/profiling" title="Profiling">
+                            Profiling
+                        </a>
+                        
+                    </div>
+                    <h1>Golang 内存优化</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Tuesday, August 17, 2021
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="前言">前言</h2>
+<p>最近接到几个关于在压力测试下，pod 中的容器被重启的问题。在查看了下 pod 的信息及使用 <code>dmesg</code> 命令到 node 节点上查看了一下系统日志，发现都是我们的 golang 容器的内存达到了我们设置的 limit 的值，从而导致了 OOMKilled 了。</p>
+<h2 id="分析">分析</h2>
+<p>既然我们查到是我们的程序发生了 OOMKilled，那我们就好分析优化了。</p>
+<h3 id="编写-benchmark-程序">编写 benchmark 程序</h3>
+<p>编写一个类似下面的 Benchmark 程序。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">Benchmark_ServeHTTP</span>(b <span style="color:#ff79c6">*</span>testing.B) {
+           <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; b.N; i<span style="color:#ff79c6">++</span> {
+               rr <span style="color:#ff79c6">:=</span> httptest.<span style="color:#50fa7b">NewRecorder</span>()
+               req, _ <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(method, url, bytes.<span style="color:#50fa7b">NewBuffer</span>(data))
+               req.Header.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;content-type&#34;</span>, <span style="color:#f1fa8c">&#34;application/json&#34;</span>)
+               h.<span style="color:#50fa7b">ServeHTTP</span>(rr, req)
+           }
+}
+</code></pre></div><h3 id="测试及结果分析">测试及结果分析</h3>
+<p>使用 golang 提供的 test 和 tool 工具去测试及分析内存使用情况。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#8be9fd;font-style:italic">cd</span> benchmark;
+go <span style="color:#8be9fd;font-style:italic">test</span> -bench<span style="color:#ff79c6">=</span>. --run<span style="color:#ff79c6">=</span>none -memprofile<span style="color:#ff79c6">=</span>newmem.pprof -benchmem;
+go tool pprof newmem.pprof
+</code></pre></div><p>我们 使用 <code>top</code> 命令可以看到下面的内存使用信息。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">   <span style="color:#bd93f9">18172</span>     <span style="color:#bd93f9">309756</span> ns/op                 <span style="color:#bd93f9">18802</span> B/op          <span style="color:#bd93f9">250</span> allocs/op
+PASS
+
+<span style="color:#ff79c6">(</span>pprof<span style="color:#ff79c6">)</span> top <span style="color:#bd93f9">20</span>
+Showing nodes accounting <span style="color:#ff79c6">for</span> 381.38MB, 75.53% of 504.92MB total
+Dropped <span style="color:#bd93f9">55</span> nodes <span style="color:#ff79c6">(</span>cum &lt;<span style="color:#ff79c6">=</span> 2.52MB<span style="color:#ff79c6">)</span>
+Showing top <span style="color:#bd93f9">20</span> nodes out of <span style="color:#bd93f9">113</span>
+      flat  flat%   sum%        cum   cum%
+   58.52MB 11.59% 11.59%   186.31MB 36.90%  xxxx/xxxx/xxxx/golog.logWithFields
+   56.55MB 11.20% 22.79%    56.55MB 11.20%  go.uber.org/zap/buffer.NewPool.func1
+   28.51MB  5.65% 28.44%    29.01MB  5.75%  net/textproto.MIMEHeader.Set <span style="color:#ff79c6">(</span>inline<span style="color:#ff79c6">)</span>
+   27.51MB  5.45% 33.88%    27.51MB  5.45%  net/http.Header.Clone
+      25MB  4.95% 38.84%       25MB  4.95%  xxxx/xxxx/xxxx/xxxx/xxxx/ports/pm.Increase
+   18.01MB  3.57% 42.40%    18.01MB  3.57%  encoding/json.<span style="color:#ff79c6">(</span>*Decoder<span style="color:#ff79c6">)</span>.refill
+   17.50MB  3.47% 45.87%    17.50MB  3.47%  encoding/json.Marshal
+      17MB  3.37% 49.24%       26MB  5.15%  net/http.NewRequestWithContext
+      15MB  2.97% 52.21%       15MB  2.97%  net/textproto.canonicalMIMEHeaderKey
+      14MB  2.77% 54.98%   313.83MB 62.15%  xxxx/xxxx/xxxx/xxxx/xxxx/domain/service.<span style="color:#ff79c6">(</span>*Subscription<span style="color:#ff79c6">)</span>.Create
+
+</code></pre></div><p>接下来我们可以使用 <code>list function name</code> 命令去查看具体的函数使用的内存情况。</p>
+<p>NOTE: 当使用 list 命令查看自己程序的时候，如果提示找不到 source 信息，可以在 go tool pprof 后面指定保存在本地的被 profile 程序的 binary 文件，并且这个 binary 文件要和生成 profile 文件的程序是在同一平台下编译的。</p>
+<h2 id="优化">优化</h2>
+<p>当使用 <code>list</code> 查看了程序内存使用的<em>大户</em>之后，就需要着手优化这部分代码。这里不具体的展示代码了，只介绍部分思路。</p>
+<ol>
+<li>
+<p>在将 []byte 转换为 string 的时候，强制转换的话，会导致重新分配空间，使用直接取地址的方式，可以节省这部分空间。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-golang" data-lang="golang"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">toString</span>(s []<span style="color:#8be9fd">byte</span>) <span style="color:#8be9fd">string</span> {
+   <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">*</span>(<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>)(unsafe.<span style="color:#50fa7b">Pointer</span>(<span style="color:#ff79c6">&amp;</span>s))
+}
+</code></pre></div></li>
+<li>
+<p>替换 zap 打印 log 的方式，从 <code>logger.With(logFields...).Info(message)</code> 替换为 <code>logger.Info(decorateString(msg), logFields...)</code></p>
+</li>
+<li>
+<p>减少内存逃逸。</p>
+<p>这里我们的 log 打印是有等级的控制，也就是说当 level 是 info 的时候，debug 的 log 并不会打印。所以对于这类 debug log，如果在这种情况下，还会分配内存，是很不好的情况，因为我们的 debug 的日志会比较多。</p>
+<p>那为什么这里会有内存分配呢，是因为发生了内存逃逸。是由于我们的打印日志的函数的接口是有 interface{}，按照 golang 的机制，会在编译期将这部分变量逃逸到堆内存上。</p>
+<p>解决这个问题，我们可以用 string 类型替换 interface{} 类型。</p>
+</li>
+<li>
+<p>减少不必要的变量分配。</p>
+<p>也就是说将变量的初始化到必要时。这里我们的情况是对于 http headers 的拷贝。由于我们是支持 tracing header 的，所以对于正常消息，我们必须将 headers 传输给下一跳，并将下一跳的 tracing header 回复到上一跳。所以对于正常消息，这种不可避免 http headers 的拷贝，因为我们需要将 request 的 tracing header 拷贝到一个变量进行传递，。 但是对于异常消息，例如上一跳信息的验证失败，服务 overloaded，这种情况下，并不需要这样的一个变量，可以直接将上一跳的 request tracing header 写入到 response header 中。</p>
+</li>
+</ol>
+<p>优化后的结果</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">   <span style="color:#bd93f9">25738</span>     <span style="color:#bd93f9">233983</span> ns/op                 <span style="color:#bd93f9">11649</span> B/op          <span style="color:#bd93f9">179</span> allocs/op
+PASS
+
+<span style="color:#ff79c6">(</span>pprof<span style="color:#ff79c6">)</span> top <span style="color:#bd93f9">20</span>
+Showing nodes accounting <span style="color:#ff79c6">for</span> 271.85MB, 72.70% of 373.92MB total
+Dropped <span style="color:#bd93f9">61</span> nodes <span style="color:#ff79c6">(</span>cum &lt;<span style="color:#ff79c6">=</span> 1.87MB<span style="color:#ff79c6">)</span>
+Showing top <span style="color:#bd93f9">20</span> nodes out of <span style="color:#bd93f9">110</span>
+      flat  flat%   sum%        cum   cum%
+   41.01MB 10.97% 10.97%    43.01MB 11.50%  net/textproto.MIMEHeader.Set <span style="color:#ff79c6">(</span>inline<span style="color:#ff79c6">)</span>
+   21.51MB  5.75% 16.72%    21.51MB  5.75%  net/http.Header.Clone
+      19MB  5.08% 21.80%       19MB  5.08%  net/textproto.canonicalMIMEHeaderKey
+   18.01MB  4.82% 26.62%    18.01MB  4.82%  encoding/json.<span style="color:#ff79c6">(</span>*Decoder<span style="color:#ff79c6">)</span>.refill
+   17.50MB  4.68% 31.30%    17.50MB  4.68%  encoding/json.Marshal
+   16.01MB  4.28% 35.58%    16.51MB  4.41%  io.ReadAll
+      16MB  4.28% 39.86%       27MB  7.22%  net/http.NewRequestWithContext
+      12MB  3.21% 43.07%   168.81MB 45.14%  xxxx/xxxx/xxxx/xxxx/xxxx/domain/service.<span style="color:#ff79c6">(</span>*Subscription<span style="color:#ff79c6">)</span>.Create
+   11.50MB  3.08% 46.15%    22.01MB  5.89%  golang.org/x/net/http2.<span style="color:#ff79c6">(</span>*Transport<span style="color:#ff79c6">)</span>.newTLSConfig
+   10.50MB  2.81% 48.95%    10.50MB  2.81%  crypto/tls.<span style="color:#ff79c6">(</span>*Config<span style="color:#ff79c6">)</span>.Clone
+
+</code></pre></div><p>可以看到基本上减少了接近一半的内存使用。</p>
+<h2 id="总结">总结</h2>
+<p>首先，不得不说 golang 的内存调优还是很方便的，因为它提供了方便的工具给你使用。其实除了这里本地做内存分析之外，还可以使用 pprof 查看程序运行时的内存使用，从而根据真实的 traffic 进行内存分析。</p>
+<p>其次，在做内存分析的时候，现在要选择那些内存使用<em>大户</em>，将它们优化到一定程度，那将会有很乐观的结果。这里我们的程序中，主要是使用的封装了 zap 的 log 库，及封装了 pm 的库及 http headers 的拷贝占用了绝大部分内存，因为这些在之前的程序中每条信息都是需要处理的。</p>
+<p>所以我优化了 log 的库，及对 pm 库的使用，及避免了不需要的 http headers 的拷贝。</p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2021/06/online_response_408_504_analysis_2/" data-toggle="tooltip" data-placement="top" title="为什么会出现随机 504，408 错误代码？（二）">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2021/09/what-happened-when-delete-pod/" data-toggle="tooltip" data-placement="top" title="记一次 Kubectl 删除 Pod 的过程分析">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Tcpdump on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/tcpdump/</link>
+    <description>Recent content in Tcpdump on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sat, 07 Dec 2019 18:44:49 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/tcpdump/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>如何抓取 pod 中的 container 的 Tcpdump</title>
+      <link>https://luffyao.github.io/2019/12/how_to_grab_tcpdump_in_container/</link>
+      <pubDate>Sat, 07 Dec 2019 18:44:49 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/how_to_grab_tcpdump_in_container/</guid>
+      <description>前言 一般情况下，想要抓取 pod 中的某个 container 的 tcpdump，直接 kubectl exec 进入那个 container，然后就可以抓取了。但是如果当你的 image 没有安装 bash 等 shell t</description>
+    </item>
+    
+  </channel>
+</rss>

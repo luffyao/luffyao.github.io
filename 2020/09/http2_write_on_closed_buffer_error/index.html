@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="write on closed buffer 错误分析" />
+    <meta property="og:title" content="write on closed buffer 错误分析" />
+    <meta property="twitter:title" content="write on closed buffer 错误分析" />
+    
+
+    
+    <meta name="description" content="Golang net/http2 Client 在压力测试下出现 write on closed buffer 错误的分析及解决方法。">
+    <meta property="og:description" content="Golang net/http2 Client 在压力测试下出现 write on closed buffer 错误的分析及解决方法。" />
+    <meta property="twitter:description" content="Golang net/http2 Client 在压力测试下出现 write on closed buffer 错误的分析及解决方法。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="golang,http2,write an closed buffer">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>write on closed buffer 错误分析 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2020/09/http2_write_on_closed_buffer_error/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        <a class="tag" href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                    </div>
+                    <h1>write on closed buffer 错误分析</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Saturday, September 26, 2020
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="问题描述">问题描述</h2>
+<p>这几天系统测试的同事给我们报了个奇怪的问题，就是在压力测试下，一个服务的 client 端在处理消息的时候会出现 <code>write on closed buffer</code> 的错误。虽然这个问题较为奇怪，但是好在它能够在本地压力测试下复现。</p>
+<h2 id="问题分析">问题分析</h2>
+<p>由于我们这个服务使用的是 Golang，并且 Client 端使用的是 HTTP2，因此，我们选择的是 net/http2。</p>
+<p>下面我贴了下基本处理逻辑代码，（这个显然是很多语法问题的）。我只是为了能够便于下面分析问题。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">Test</span>() <span style="color:#8be9fd">error</span>{
+    req, _ <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(http.MethodPost, url, bytes.<span style="color:#50fa7b">NewBuffer</span>(body))
+
+    rsp, err <span style="color:#ff79c6">:=</span> f.client.<span style="color:#50fa7b">Do</span>(req)
+
+    <span style="color:#ff79c6">defer</span> <span style="color:#8be9fd;font-style:italic">func</span>() { _ = rsp.Body.<span style="color:#50fa7b">Close</span>() }()
+
+    <span style="color:#ff79c6">switch</span> rsp.StatusCode {
+    <span style="color:#ff79c6">case</span> http.StatusCreated:
+        <span style="color:#ff79c6">return</span> rsp.Header.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;location&#34;</span>), <span style="color:#ff79c6">nil</span>
+    <span style="color:#ff79c6">case</span> http.StatusNotFound:
+        <span style="color:#ff79c6">return</span>  <span style="color:#8be9fd">error</span>.<span style="color:#50fa7b">NewError</span>(rsp.StatusCode)
+    <span style="color:#ff79c6">case</span> http.StatusNotImplemented:
+        b, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(rsp.Body)
+        <span style="color:#ff79c6">return</span> <span style="color:#8be9fd">error</span>.<span style="color:#50fa7b">NewError</span>(rsp.StatusCode)
+    <span style="color:#ff79c6">case</span> http.StatusServiceUnavailable:
+        b, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(rsp.Body)
+        <span style="color:#ff79c6">return</span> <span style="color:#8be9fd">error</span>.<span style="color:#50fa7b">NewError</span>(rsp.StatusCode)
+    <span style="color:#ff79c6">default</span>:
+        <span style="color:#ff79c6">return</span> <span style="color:#8be9fd">error</span>.<span style="color:#50fa7b">NewError</span>(http.StatusInternalServerError)
+    }
+}
+</code></pre></div><p>而上面为啥我说这个问题比较奇怪呢，看到这段代码，是不是觉得相当简单，不可能出现问题呢。所以没理由正常情况下没问题，压力测试下就会出现这个 <code>write on closed buffer</code> 的错误。</p>
+<p>虽然觉得奇怪，但是还是要分析解决的。因此我们就在本地复现这个问题，从而定位解决这个问题。</p>
+<h2 id="问题复现">问题复现</h2>
+<p>由于我们系统测试的同事有他们自己的一套测试用例和集群环境，因为他们比较忙，基本上不可能全职为我们 debug。因此我们只能在本地使用 h2load 和写一个 mock server 去模拟 Server 端回的数据，期待能够复现。</p>
+<p>好在上天不负有心人，我们很快就复现了这个问题，并且基本上每次都能够复现（我们一次 10 分钟压力测试）。好了，既然能够复现问题，那找到问题的根源也指日可待。</p>
+<h2 id="问题定位">问题定位</h2>
+<p>由于我们知道错误的内容是什么，于是乎，在 net/http2 里面 grep 了一把 <code>write on closed buffer</code> 关键词。</p>
+<p>结果出现了一处： <code>./pipe.go:69:var errClosedPipeWrite = errors.New(&quot;write on closed buffer&quot;)</code> 。
+然后又在 pipe.go 中 grep 了一把 <code>errClosedPipeWrite</code>，只有两处，一处就是上面那句，另一处是在下面这个函数中。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// Write copies bytes from p into the buffer and wakes a reader.
+</span><span style="color:#6272a4">// It is an error to write more data than the buffer can hold.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (p <span style="color:#ff79c6">*</span>pipe) <span style="color:#50fa7b">Write</span>(d []<span style="color:#8be9fd">byte</span>) (n <span style="color:#8be9fd">int</span>, err <span style="color:#8be9fd">error</span>) {
+    p.mu.<span style="color:#50fa7b">Lock</span>()
+    <span style="color:#ff79c6">defer</span> p.mu.<span style="color:#50fa7b">Unlock</span>()
+    <span style="color:#ff79c6">if</span> p.c.L <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+        p.c.L = <span style="color:#ff79c6">&amp;</span>p.mu
+    }
+    <span style="color:#ff79c6">defer</span> p.c.<span style="color:#50fa7b">Signal</span>()
+    <span style="color:#ff79c6">if</span> p.err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+        <span style="color:#ff79c6">return</span> <span style="color:#bd93f9">0</span>, errClosedPipeWrite
+    }
+    <span style="color:#ff79c6">if</span> p.breakErr <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+        p.unread <span style="color:#ff79c6">+=</span> <span style="color:#8be9fd;font-style:italic">len</span>(d)
+        <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">len</span>(d), <span style="color:#ff79c6">nil</span> <span style="color:#6272a4">// discard when there is no reader
+</span><span style="color:#6272a4"></span>    }
+    <span style="color:#ff79c6">return</span> p.b.<span style="color:#50fa7b">Write</span>(d)
+}
+</code></pre></div><p>此函数可以看到出现我们的问题的条件就是这里的 <code>p.err != nil</code>。 因此我们需要找到设置这个 err 值的地方。然后发现下面这两个函数：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#6272a4">// CloseWithError causes the next Read (waking up a current blocked
+</span><span style="color:#6272a4">// Read if needed) to return the provided err after all data has been
+</span><span style="color:#6272a4">// read.
+</span><span style="color:#6272a4">//
+</span><span style="color:#6272a4">// The error must be non-nil.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (p <span style="color:#ff79c6">*</span>pipe) <span style="color:#50fa7b">CloseWithError</span>(err <span style="color:#8be9fd">error</span>) { p.<span style="color:#50fa7b">closeWithError</span>(<span style="color:#ff79c6">&amp;</span>p.err, err, <span style="color:#ff79c6">nil</span>) }
+
+<span style="color:#6272a4">// closeWithErrorAndCode is like CloseWithError but also sets some code to run
+</span><span style="color:#6272a4">// in the caller&#39;s goroutine before returning the error.
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">func</span> (p <span style="color:#ff79c6">*</span>pipe) <span style="color:#50fa7b">closeWithErrorAndCode</span>(err <span style="color:#8be9fd">error</span>, fn <span style="color:#8be9fd;font-style:italic">func</span>()) { p.<span style="color:#50fa7b">closeWithError</span>(<span style="color:#ff79c6">&amp;</span>p.err, err, fn) }
+
+</code></pre></div><p>同样 grep 下这两个函数使用的地方（这里我们是 client 端有问题，因此过滤掉了 server 端的调用）:</p>
+<pre tabindex="0"><code class="language-log" data-lang="log">./pipe.go:104:func (p *pipe) closeWithErrorAndCode(err error, fn func()) { p.closeWithError(&amp;p.err, err, fn) }
+./transport.go:2216:cs.bufPipe.closeWithErrorAndCode(err, code)
+
+./pipe.go:95:func (p *pipe) CloseWithError(err error) { p.closeWithError(&amp;p.err, err, nil) }
+./transport.go:316:cs.bufPipe.CloseWithError(err)
+./transport.go:862:cs.bufPipe.CloseWithError(err)
+./transport.go:1728:cs.bufPipe.CloseWithError(err) // no-op if already closed
+./transport.go:2340:cs.bufPipe.CloseWithError(err)
+
+</code></pre><p>可以看到除了在<code>./pipe.go</code> 中两处定义之外，只有五处调用了这两个函数。通过对这五处调用的地方加上日志进行 debug。并且设置<code>GODEBUG=http2debug=2</code> 环境变量开启了 net/HTTP2 的 debug 模式。
+然后发现很多下面这句日志<code>2020/09/25 14:30:08 http2: Framer 0xc0004b4380: wrote RST_STREAM stream=170185 len=4 ErrCode=CANCEL</code>。 于是过滤了下这个 CANCEL 的 ErrCode 对应于代码里为 ErrCodeCancel。于是在 ErrCodeCancel 相关的地方都加了日志进行分析。</p>
+<p>通过分析，发现下面一个规律：</p>
+<pre tabindex="0"><code class="language-log" data-lang="log">2020/09/25 14:30:08 http2: Framer 0xc0004b4380: read HEADERS flags=END_HEADERS stream=170185 len=217
+2020/09/25 14:30:08 http2: Transport received HEADERS flags=END_HEADERS stream=170185 len=217
+2020/09/25 14:30:08 http2: Framer 0xc0004b4380: read DATA flags=END_STREAM stream=170185 len=290 data=&quot;xxxxx(34 bytes omitted)
+2020/09/25 14:30:08 http2: Transport received DATA flags=END_STREAM stream=170185 len=290 data=&quot;xxxxx&quot; (34 bytes omitted)
+ErrCodeCancel 8 cancelStream ID  170185
+2020/09/25 14:30:08 http2: Framer 0xc0004b4380: wrote RST_STREAM stream=170185 len=4 ErrCode=CANCEL
+2020/09/25 14:30:08 http2: Transport conn 0xc000445980 received error from processing frame DATA flags=END_STREAM stream=170185 len=290 data=&quot;xxxxx(34 bytes omitted): write on closed buffer
+</code></pre><p>这里以 streamID 为 170185 为例，分析下它的处理流程。(NOTE: <code>ErrCodeCancel 8 cancelStream ID  170185</code> 是在 <code>func (b transportResponseBody) Close() error</code> 函数中）。</p>
+<p>从数据包来看，先是 socket 读了 170185 stream 的 HEADER 部分，然后 socket 又收到了 DATA 部分。然后此时，有人调用了 <code>func (b transportResponseBody) Close() error</code>函数去关闭了 responseBody, 并写入了 RST_STREAM 给 Server， 但是此时将 DATA 的数据写入 pip 的时候就出现了我们的这个错误（上述有提到是在调用 pip.Write 函数时，出现的这个问题）。</p>
+<p>从上面的处理来看基本上就是将 DATA 数据写入到 pip 的时候，发现 pipbuf 已经被人关闭了。并且是通过调用 <code>func (b transportResponseBody) Close() error</code> 函数关闭的。那这个函数显然是我们业务逻辑代码里写的 <code>defer func() { _ = rsp.Body.Close() }()</code>。</p>
+<p>所以分析下来 也就是说，我们收到了 HEADER 进行处理了，就把 response.Body 关闭了，然后 DATA 部分想写入 response.Body 里面，但是 response.Body 已经被关闭，所以就出现这个错误了。从代码上看下来，刚好我们对应于 201 的 response 的 DATA 部分并没有处理。所以导致了这个问题。</p>
+<h2 id="解决方案">解决方案</h2>
+<p>知道问题所在，那我们就能很快解决了。我是通过在 201 的 response 分支中添加了<code>b, err := ioutil.ReadAll(rsp.Body)</code>, 对 response Body 的处理，也就是说等 DATA 部分的数据消费完，再结束函数，调用 defer 的 Close 函数。这样就可以解决这个问题了。通过修改并测试，最终问题解决。</p>
+<h2 id="response-body-处理流程">Response Body 处理流程</h2>
+<p>请参考:</p>
+<p>
+  <img src="https://res.cloudinary.com/luffyao/image/upload/v1601096103/golang/nethttp2_irauxe.png" alt="net http2 response body handling flow">
+
+</p>
+<p>简单描述下这个流程：</p>
+<ol>
+<li>当 client 端收到 HEADER 的时候就会创建一个新的 http.Response 结构，并创建一个 pipe 赋值给了 cs.bufPipe，并重新创建了一个 transportResponseBody 对象赋值给了 res.Body。</li>
+<li>当有 DATA frame 的时候，则会在 processData 的函数中调用 cs.bufPipe.Write 函数将 DATA 写入到 bufPipe 中。</li>
+<li>当业务逻辑调用 ioutil.ReadAll(res.Body) 的时候，会最终调用到 transportResponseBody 对象的 Read 函数，并最后调用到 pipe 的 Read 函数。从而将第二步中写入的 DATA 读取出来。</li>
+<li>当处理数据完毕，则调用 res.Body.Close 函数关闭相关资源。首先这函数其实是 transportResponseBody.Close 函数，然后会调用到 pipe 的 BreakWithError 函数，最后将 pipe 的 pipeBuffer 置为 nil，从而使得资源立即释放。</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>在拿到问题的时候，其实我们开始有点先入为主的思想，想着这个 defer 函数肯定没问题，而浪费了不少时间。而后来又怀疑是 net/http2 库版本升级导致这个问题的出现。于是有分析其代码中的逻辑。而并没有很细致的数据包的处理流程上的分析。基本上通过广撒网的方式在各种怀疑的地方添加日志进行分析。这种方式虽然很有用，但是毕竟有点走弯路。因为这是压力测试，会有很多的日志。所以添加了很多不相关的日志反而添加了分析的难度。</p>
+<p>在这个问题也能看出来，net/http2 库对于数据的处理部分不是很好，例如这里我们之所以没有处理 DATA 部分是因为我们不需要 DATA 的数据，又不想调用 ReadAll 去读取，毕竟读取也是需要时间的。但是这会导致本文中的错误，这个错误会导致连接会被关闭，所以这个错误并不是我们所期望的。也不知这个是不是一个 net/httpt2 的一个 BUG 呢？</p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2020/09/designpattern/" data-toggle="tooltip" data-placement="top" title="GoF 23 种设计模式学习总结">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2020/10/clientgoinformer/" data-toggle="tooltip" data-placement="top" title="client-go 之 Informer 篇">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

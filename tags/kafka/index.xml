@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Kafka on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/kafka/</link>
+    <description>Recent content in Kafka on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sun, 01 May 2022 22:19:58 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/kafka/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>基于 kafka-go 的微服务的 Stop the World 分析</title>
+      <link>https://luffyao.github.io/2022/05/kafka-go_analysis/</link>
+      <pubDate>Sun, 01 May 2022 22:19:58 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2022/05/kafka-go_analysis/</guid>
+      <description>问题描述 基于 kafka 框架的两个处理服务的实例，订阅一个 topic，并且有 20 个 partition，在 traffic 正常发送的情况下，手动杀死一个实例，测试是否对</description>
+    </item>
+    
+  </channel>
+</rss>

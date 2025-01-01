@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>HPACK on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/hpack/</link>
+    <description>Recent content in HPACK on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Sun, 05 Apr 2020 19:53:22 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/hpack/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>RFC7541 HPACK 总结</title>
+      <link>https://luffyao.github.io/2020/04/hpack-summary/</link>
+      <pubDate>Sun, 05 Apr 2020 19:53:22 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/04/hpack-summary/</guid>
+      <description>概括 HPACK 是一个新的可以消除 header 字段冗余，限制已知安全攻击的脆弱性和在受限的环境中有限的内存使用的压缩器。RFC7541 定义了两个表，分别是一张静</description>
+    </item>
+    
+  </channel>
+</rss>

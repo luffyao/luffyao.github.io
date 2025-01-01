@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+    <meta property="og:site_name" content="Luffyao&#39;s Blog">
+    <meta property="og:type" content="article">
+
+    
+    <meta property="og:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg">
+    <meta property="twitter:image" content="https://luffyao.github.io/https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg" />
+    
+
+    
+    <meta name="title" content="分布式一致性算法 Raft 论文学习总结" />
+    <meta property="og:title" content="分布式一致性算法 Raft 论文学习总结" />
+    <meta property="twitter:title" content="分布式一致性算法 Raft 论文学习总结" />
+    
+
+    
+    <meta name="description" content="学习分布式一致性算法 Raft 论文后，个人的理解及总结。">
+    <meta property="og:description" content="学习分布式一致性算法 Raft 论文后，个人的理解及总结。" />
+    <meta property="twitter:description" content="学习分布式一致性算法 Raft 论文后，个人的理解及总结。" />
+    
+
+    
+    <meta property="twitter:card" content="summary" />
+    
+    
+    
+    <meta name="keywords" content="raft,一致性">
+    
+
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>分布式一致性算法 Raft 论文学习总结 | Luffyao 的博客 | Luffyao&#39;s Blog</title>
+
+    <link rel="canonical" href="/2021/04/raft-summary/">
+
+    
+    
+    
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    
+    <link rel="stylesheet" href="/css/hugo-theme-cleanwhite.min.css">
+
+    
+    <link rel="stylesheet" href="/css/zanshang.css">
+
+    
+    <link rel="stylesheet" href="/css/font-awesome.all.min.css">
+
+    
+    
+
+    
+    <script src="/js/jquery.min.js"></script>
+
+    
+    <script src="/js/bootstrap.min.js"></script>
+
+    
+    <script src="/js/hux-blog.min.js"></script>
+
+    
+    <script src="/js/lazysizes.min.js"></script>
+
+    
+    
+
+</head>
+
+
+
+
+
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+
+    <div class="container-fluid">
+        
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Luffyao&#39;s Blog</a>
+        </div>
+
+        
+        
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">All Posts</a>
+                    </li>
+                    
+                        
+                        <li>
+                            <a href="/categories/tech/">tech</a>
+                        </li>
+                        
+                        <li>
+                            <a href="/categories/%E6%97%A5%E5%B8%B8%E9%9A%8F%E7%AC%94/">日常随笔</a>
+                        </li>
+                        
+                    
+                    
+		    
+                        <li><a href="/top/about//">ABOUT</a></li>
+                    
+		            <li>
+                        <a href="/search"><i class="fa fa-search"></i></a>
+		           </li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    
+</nav>
+<script>
+    
+    
+    
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    $toggle.addEventListener('click', handleMagic)
+    function handleMagic(e){
+        if ($navbar.className.indexOf('in') > 0) {
+        
+            $navbar.className = " ";
+            
+            setTimeout(function(){
+                
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        }else{
+        
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+</script>
+
+
+
+
+<style type="text/css">
+    header.intro-header {
+        background-image: url('https://res.cloudinary.com/luffyao/image/upload/v1599378392/blog/blog-bg_zfdkp9.jpg')
+    }
+</style>
+
+<header class="intro-header" >
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                    </div>
+                    <h1>分布式一致性算法 Raft 论文学习总结</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        
+                            Posted by 
+                            
+                                Luffyao
+                             
+                            on 
+                            Sunday, April 18, 2021
+                            
+                            
+                            
+                            
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+<article>
+    <div class="container">
+        <div class="row">
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                
+                <h2 id="前言">前言</h2>
+<p>最近准备去看看 ETCD 的源码，然后网上看到它是基于 Raft 论文实现的，所以为了后面更好的理解 ETCD，于是便想先来看看 Raft 论文，想先了解下这个分布式数据一致性算法 Raft 论文的具体内容。经过几天工作之余的时间，认真的看了下这个论文，于是乎写上这边总结。</p>
+<p>在分布式中，有一个叫 <code>CAP</code> 的理论概念，及 <code>C-一致性 (Consistense)</code>，<code>A-可用性 (Available)</code>，<code>P-分区容错性 (Partition toleration)</code>。</p>
+<p>及 <code>BASE</code> 理论， <code>Basic Available</code>， <code>Soft state</code>， <code>Eventually Consistense</code>。</p>
+<h2 id="概括">概括</h2>
+<p>从 Raft 论文中，贯穿整个论文的一个核心思想就是它是为了便于理解而设计的。而这里的背景就是论文的作者学习了 <code>Paxos</code>，觉得它太难理解了，也不太好实现。（这里可以参考<code>第 3 节 Waht's wrong with Paxos</code> 中的两个缺点：<code>The first drawback is that Paxos is exceptionally difficult to understand</code> 和 <code>The second problem with Paxos is that it does not provide a good foundation for building practical implementations.</code>)。 此外作者不止一处指出论文的设计初衷就是便于理解，并专门安排一节（<code>第四节 Desining for understandability</code>) 去解释这个问题。而第 4 节中也提到了通过了两种方式去简化了这个问题。第一即是分解问题，第二则是减少中间的状态从而简化状态空间，并能够减少不确定性。及<code>第 9.1 节 Understandability</code>，根据实际调查，进行数据分析，从而对比 Raft 的易理解的优势。</p>
+<p>论文看下来，确实觉得还是很好理解的，且也为实现者大大地简化了接口，目前只有三个接口 <code>RequestVote</code>，<code>AppendEntries</code> 及 <code>State</code>（除了 Log 压缩的接口 <code>installSnapshot</code>）。而所谓好理解，个人觉得也只是通篇来说比较好理解。之所以这么说，是因为我阅读了几遍之后，还是有个别地方理解不透，或没理解。具体地方我会在下面具体的章节中备注。如果有同学们理解了，可以私信我，共同学习一下。</p>
+<h2 id="算法理解">算法理解</h2>
+<p>理解 Raft 具体的算法理论之前，我简单的描述下复制状态机的概念（<code>第 2 节 Replicated state machines</code>)。它其实在这章节的开始就提出来了，一致性算法是出现在复制状态机的上下文中的，也就是说一致性算法其实就是解决复制状态机中数据同步最后一致的问题的。而复制状态机的一致性，其实是其中如何对 Log 的复制同步问题。因为复制状态机是将 client 发送的 command 以每个 Entry 的形式存储在 Log 中，而不同的机器中的 Log 的复制问题也就是解决了复制状态机的一致性问题。为什么可以这么说呢，是因为，复制状态机的概念是如果多个不同的 Server 的初始状态是一致的，那么通过执行相同顺序的一些列命令后，最终状态必定是一致的。这里可以主要通过作者的两句话理解 (<code>Replicated state machines are typically implemented using a replicated log</code> 和 <code>Keeping the replicated log consistent is the job of the consensus algorithm.</code>)。</p>
+<p>所以这里的一致性问题，个人觉得其实就是 Logs 的复制同步问题，及只要这些 log  的 entries 能按照同样的顺序复制到不同的机器上，则最终保证了算法的一致性问题。如是乎，个人理解，Raft 的算法即是重要解决 Log 复制同步问题。</p>
+<h3 id="基本概念">基本概念</h3>
+<p>整个 Raft 算法理论分为三个子问题：<code>Leader election</code>, <code>Log replication</code> 及 <code>Safety</code>。并分了三个子章节去分别描述。</p>
+<p>并提出了下面这些基本概念：</p>
+<ul>
+<li>
+<p><code>leader</code> - 选举出来服务的 server。</p>
+</li>
+<li>
+<p><code>follower</code> - 被动的，只简单的响应 leader 和 candidate 的请求。如果一个 follower 被 client 请求，它将会重定向到 leader 中。</p>
+</li>
+<li>
+<p><code>candidate</code> - 用于选举一个新的 leader。</p>
+</li>
+<li>
+<p><code>term</code> - raft 将时间划为任意的 term 来表示，每一个 term 以选举开始，如果一个 candidate 赢得了选举，成为 leader，则它将会持有这个 term 的剩下的时间。</p>
+</li>
+<li>
+<p><code>election timeout</code> - 一个 follower 没有收到任何请求的一段时间，如果这段时间内没有收到任何请求，follower 则认为没有可用的 leader，将会触发一个新一轮选举。</p>
+</li>
+</ul>
+<p>这里引入了一个 <code>split vote</code> 的问题：即同时多个 candidate 被选为 leader，这是违背 Election Safety 的特性的，所以是不被允许的，具体的解决方法在 Leader 选举章节介绍了。而这里当这种情况发生后，这个 term 将只会有选举的时间，当重新选举的时候，会产生一个更新的 Term。</p>
+<p>这里需要将 Raft 中几个性质介绍一下：</p>
+<ul>
+<li>
+<p><code>Election Safety</code> - 即在一个 Term 中最多只可以选出一个 Leader。（个人觉得这是 Raft 一致性的基石）</p>
+</li>
+<li>
+<p><code>Leader Append-only</code> - Leader 只能添加新的 Entries，不能删除或者重写 Log 中的 Entries。</p>
+</li>
+<li>
+<p><code>Log Matching</code> - 如果两个 logs 中包含一个相同的 index 和 term 的 entry，然后通过给定一个 index，这两个 log 中的所有的 entries 都是相同的。</p>
+</li>
+<li>
+<p><code>Leader Completeness</code> - 如果一个 Log entry 在一个给定的 Term 被提交，然后那个 entry 将会在那些所有比这个 Term 要大的 leader 的 log 中。</p>
+</li>
+<li>
+<p><code>State Machine Safety</code> - 如果一个 server 在一个给定的 index 已经将 log entry 应用到它的状态机中，于是乎，其他的 server 则不可能在相同的 index 处应用一个不同的 log entry。</p>
+</li>
+</ul>
+<h3 id="leader-选举">Leader 选举</h3>
+<p>Raft 用心跳（不带任何 log entry 的 AppendEntries RPC) 的方式去维持leader的控制权。当开始的时候，所有的Server都是 follower，然后当一个 follower 收到从 Leader 或者 candidate 的有效的 RPC，它将保持 follower 状态。而通过选举成为leader的server，则会定期发送心跳给所有的 follower 去告诉它们，自己还活着，从而避免 follower 出现election timeout，以至于触发新的一轮选举。</p>
+<p>这里在一次选举过程中，一个 server 可以有三种不同的结果：</p>
+<ul>
+<li>
+<p>server 赢得了选举， 成为了 leader</p>
+</li>
+<li>
+<p>其他 server 赢得了选举，该 server 收到了对应的 heartbeat。</p>
+</li>
+<li>
+<p>出现了 split vote，这次选举没有 server 成为 leader。</p>
+</li>
+</ul>
+<p>这里为了解决 split vote 的问题，提出了一个随机选举超时 (<code>randomized election timeout</code>) 的概念。主要思想是通过随机产生一个 election timeout 时间，从而降低 servers 触发成为 candidate 去触发选举的概率。（个人理解，这个算法不能根本解决这个问题，只能在一定程度上降低这个问题的概率。) 这里，作者还提到了一个 <code>ranking</code> 算法，但经过作者试验，在很多边界问题上，仍不能彻底解决，因此，作者最终选择了随机选举超时的方式。</p>
+<h3 id="log-复制同步">Log 复制同步</h3>
+<p>当 leader 收到 client 的请求，它将创建一个新的包含这个请求的 entry，并追加到自己的 log 中，然后并行的发送 <code>AppendEntries</code> RPC 给所有其他的 Server 去复制这个 entry。<code>当这个 entry 被复制</code>，然后这个 leader 将请求提交到状态机中进去执行，再将结果返回给 client。这里如果某个 follower 出现问题 (crash or run slowly) 没有收到请求，leader 将会一直发送 AppendEntries，直到所有的 follower 最终存储了所有的 log entries。</p>
+<p>这里重点问题就是这个<code>当这个 entry 被复制</code>。 什么叫 entry 被复制呢？按照这篇论文，提到了一个 <code>commited</code> 的概念（当 leader 决定它可以安全的应用这个 log entry 到状态机执行的时候，这样的一个 entry 可以被叫做 commited），及这个 entry 被大多数 follower 同步的时候及可理解为被复制了。（例如文中推荐的 5 个 sever，2 个 follower 同步后，几个当做是被复制了，可进行下面的操作）。</p>
+<p>这里结合 Log Matching 性质提出了下面两个特性：</p>
+<ul>
+<li>
+<p>如果不同 logs 中的两个 entry 有相同的 index 和 term，则表示它们存储了相同的 client 请求命令。</p>
+</li>
+<li>
+<p>如果不同 logs 中的两个 entry 有相同的 index 和 term，然后所有这些 logs 中之前的 entries 也是相同的。</p>
+</li>
+</ul>
+<p>这两个性质则能够保证，当不同 logs 中在同一个 index 下，如果 term 也相同，则这 index 的请求命令也相同，并且这个 index 之前的所有 entries 也都相同。这样就保证了 logs 的顺序是一致的。那么这种性质如果表示出来呢？ 作者这 AppendEntries 的接口中引入了两个参数及 <code>preLogIndex</code>，<code>preLogTerm</code> 来保证第二条性质的成立。</p>
+<p>但这里并不能完全的解决 log 复制的一致性问题。例如当一个 leader 在刚复制 entry 到大部分 follower 中后，它自己在提交 entry 到状态机之前挂了，（及这个 entry 还不是 commited 的状态）。这个时候另外的 candidate 被选为 leader，进行同步，这个同步到大多数 follower 但没有 commited 的 entry，则会被新的 leader 的 entry 覆盖。及不同情况会导致不同的结果，即文中 Figure8 的 d 和 e 的情况。（其实我没有理解到底 d 的情况是不是正确的，从文中看下来，我并没有看到对这个问题的过多描述。不知道文中的 5.4.2 是不是描述的这个问题）</p>
+<h3 id="safety">Safety</h3>
+<p>由于上面的 leader 选举和 log 复制的过程中并不是安全的，例如如何保证 Leader Safety 及 Leader Completeness 的性质呢，那这章节则描述了这些问题。</p>
+<h4 id="选举限制">选举限制</h4>
+<p>Raft 保证当每个新的 leader 在它选举的时刻，它将有所有在之前 Terms 被提交的 entries，不需要将那些 entries 传输到 leader 中。这其实保证了 leader 中的 entries 始终是保证最新的，否则，这个 server 也不能被选为 leader。这种机制是通过 server 进行投票（RequestVote RPC）进行保证的。</p>
+<h4 id="提交之前-term-的-entries">提交之前 Term 的 entries</h4>
+<p>这一章节，说实话，我没有太看懂，虽然文中提交了上面所说的 Figure8 出现的问题（即 C 的情况下 Term2 被同步到大多数 server 中，但是此时 S1 只同步了 S3, 比还没有知道 S2 的状态，因此 S1 是不能立即知道 Term2 已经存储在大多数 Server 中，可以进行提交，但这时，S1 又挂了，出现了 D 的情况）。</p>
+<p>但对于这个问题文中这么一段话 <code>Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current term are committed by counting replicas; once an entry from the current term has been committed in this way, then all prior entries are committed indirectly because of the Log Matching Property.</code></p>
+<p>这里几个问题没太理解：</p>
+<ul>
+<li>
+<p><code>counting replicas</code> 指的什么？</p>
+</li>
+<li>
+<p><code>all erior entries are commited indirectly because of the Log Matching Property</code> 怎么个间接提交？</p>
+</li>
+</ul>
+<h3 id="timing-和-availability">Timing 和 Availability</h3>
+<p>broadcastTime &laquo; electionTimeout &laquo; MTBF</p>
+<ul>
+<li>
+<p><code>broadcastTime</code>: leader 发送 RPCs 且收到响应给 follower 的平均时间。</p>
+</li>
+<li>
+<p><code>electionTimeout</code>: follower 判断 leader 是否可得的超时时间。</p>
+</li>
+<li>
+<p><code>MTBF</code>: 一个 server 故障之间的平均时间</p>
+</li>
+</ul>
+<h2 id="cluster-membership-changes">Cluster Membership changes</h2>
+<p>将 configuration 改变的请求同样通过 log entry 的方式进行同步更新，从而实现 Cluster 配置的更新。一般做法是将老的配置删除，再运用新的配置，但是这个过程中 服务是不能工作的。</p>
+<p>可能是考虑到可用性，作者提出一种新的方式去做配置更新。引入一个 <code>joint consensus</code> 的概念。即将 C-old 和 C-new 合并成 C-old&amp;new。 当将 C-old&amp;new 复制到大多数 server 中，然后提交到状态机中执行，当这个 C-old&amp;new 被提交后，则再将 Cnew 运用到已赋值的 sever 中，最后达到所有的 sever 都被更新到 Cnew。</p>
+<h2 id="log-压缩">Log 压缩</h2>
+<p>为什么要进行 log 的压缩，这是由于复制状态机中使用了 Log 存储 client 发送的请求，并在 servers 中进行同步，所以随着时间的推移及 client 请求的增加，Server 中的存储都会有压力，最终可能导致 Server 的不可用，从而影响到整个一致性算法的可靠性。因此对于日志的压缩是必不可免的问题。而文中则使用了常用的 Snapshotting（快照）的方式进行日志压缩。并提供了一个新的 <code>installSnapshot</code> RPC。</p>
+<p>由于在 Server 间引入了一个新的 RPC，所以对性能方面还是会有一定的影响，例如文中提出两个问题：</p>
+<ul>
+<li>
+<p>决定什么时候发送 snapshot？发的太频繁，就会浪费带宽，如果时间太长，则有没有很好地作用。</p>
+</li>
+<li>
+<p>由于写一个 snapshot 也会占用一些时间，从而会影响到正常的操作。</p>
+</li>
+</ul>
+<h2 id="总结">总结</h2>
+<p>由于还没有学习 Paxos 的算法，但是从网上大概的了解了下，个人感觉 Raft 算法正如它的宗旨一样还是比较好理解的。但可能是刚接触到这类问题，所以有些概念还不是太理解，就例如上面我提出的几个问题，我个人就没有理解其意。但总体是简洁明了的。</p>
+<h2 id="参考">参考</h2>
+<p><a href="https://raft.github.io/">raft</a></p>
+
+
+                
+
+                
+                <hr>
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2020/10/clientgoinformer/" data-toggle="tooltip" data-placement="top" title="client-go 之 Informer 篇">&larr;
+                            Previous Post</a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2021/06/online_response_408_504_analysis_1/" data-toggle="tooltip" data-placement="top" title="为什么会出现随机 504，408 错误代码？（一）">Next
+                            Post &rarr;</a>
+                    </li>
+                    
+                </ul>
+                
+
+                
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="luffyao/luffyao.github.io"
+        data-repo-id="MDEwOlJlcG9zaXRvcnkyMjUxMjM5MjQ="
+        data-category="Announcements"
+        data-category-id="DIC_kwDODWseVM4CWTCn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="light"
+        data-lang="zh-CN"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+            </div>
+
+            
+            
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+            
+
+            
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                        
+                        
+                        
+                        <a href="/tags/c&#43;&#43;17" title="c&#43;&#43;17">
+                            c&#43;&#43;17
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/client-go" title="client-go">
+                            client-go
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/coredump" title="coredump">
+                            coredump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/design-pattern" title="design-pattern">
+                            design-pattern
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/docker" title="docker">
+                            docker
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/envoy" title="envoy">
+                            envoy
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/gerrit" title="gerrit">
+                            gerrit
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/git" title="git">
+                            git
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/github" title="github">
+                            github
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/golang" title="golang">
+                            golang
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hpack" title="hpack">
+                            hpack
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/hugo" title="hugo">
+                            hugo
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/iptables" title="iptables">
+                            iptables
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/istio" title="istio">
+                            istio
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kafka" title="kafka">
+                            kafka
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kernel" title="kernel">
+                            kernel
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/kubernetes" title="kubernetes">
+                            kubernetes
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/linux" title="linux">
+                            linux
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/mtls" title="mtls">
+                            mtls
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/net" title="net">
+                            net
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/netfilter" title="netfilter">
+                            netfilter
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/operator-sdk" title="operator-sdk">
+                            operator-sdk
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/profiling" title="profiling">
+                            profiling
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/raft" title="raft">
+                            raft
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/tcpdump" title="tcpdump">
+                            tcpdump
+                        </a>
+                        
+                        
+                        
+                        <a href="/tags/%E9%9A%8F%E7%AC%94" title="随笔">
+                            随笔
+                        </a>
+                        
+                        
+                    </div>
+                </section>
+                
+
+                
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">                  
+                    
+                    <li>
+                        <a href="mailto:luffyao001@gmail.com">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fas fa-envelope fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		           
+                    
+                    
+                    
+                    
+
+		            
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/luffyao">
+                            <span class="fa-stack fa-lg">
+                                <i class="fas fa-circle fa-stack-2x"></i>
+                                <i class="fab fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+		            
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+            
+            
+            
+           
+                   <li>
+                       <a href='' rel="alternate" type="application/rss+xml" title="Luffyao&#39;s Blog" >
+                           <span class="fa-stack fa-lg">
+                               <i class="fas fa-circle fa-stack-2x"></i>
+                               <i class="fas fa-rss fa-stack-1x fa-inverse"></i>
+                           </span>
+                       </a>
+                   </li>
+            
+             </ul>
+		<p class="copyright text-muted">
+                    Copyright &copy; Luffyao&#39;s Blog 2025
+                    <br>
+                    <a href="https://github.com/luffyao/luffyao.github.io">blog theme</a> 移植自 <a href="https://themes.gohugo.io/hugo-theme-cleanwhite">CleanWhite Hugo</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+
+
+<script>
+    function loadAsync(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+
+
+
+
+
+<script>
+    
+    if($('#tag_cloud').length !== 0){
+        loadAsync("/js/jquery.tagcloud.js",function(){
+            $.fn.tagcloud.defaults = {
+                
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+
+<script>
+    loadAsync("https://cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+
+
+
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        
+        
+        
+        
+            _containerSelector = 'div.post-container'
+        
+
+        
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        
+        $(selector).html('')
+
+        
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    
+
+
+    loadAsync("\/js\/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+
+</body>
+</html>

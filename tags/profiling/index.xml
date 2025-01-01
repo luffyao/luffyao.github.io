@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Profiling on Luffyao&#39;s Blog</title>
+    <link>https://luffyao.github.io/tags/profiling/</link>
+    <description>Recent content in Profiling on Luffyao&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-hans</language>
+    <lastBuildDate>Tue, 17 Aug 2021 09:23:03 +0800</lastBuildDate><atom:link href="https://luffyao.github.io/tags/profiling/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Golang 内存优化</title>
+      <link>https://luffyao.github.io/2021/08/golang-memory-optimize/</link>
+      <pubDate>Tue, 17 Aug 2021 09:23:03 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2021/08/golang-memory-optimize/</guid>
+      <description>前言 最近接到几个关于在压力测试下，pod 中的容器被重启的问题。在查看了下 pod 的信息及使用 dmesg 命令到 node 节点上查看了一下系统日志，发现都是我们的 golang 容</description>
+    </item>
+    
+    <item>
+      <title>如何在 pod 中做 golang 的 profiling</title>
+      <link>https://luffyao.github.io/2020/03/how_to_profiling_go_in_pod/</link>
+      <pubDate>Sat, 07 Mar 2020 12:53:42 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2020/03/how_to_profiling_go_in_pod/</guid>
+      <description>前言 相比于 C++ 在 pod 中做 profiling， 那么对于云原生的 golang 来说就太方便了。下面我将讲述下我做 golang profiling 的具体过程和步骤。由于我们是基于 Restful 接口的系统</description>
+    </item>
+    
+    <item>
+      <title>用 Perf 给 C&#43;&#43; 代码做 Profiling</title>
+      <link>https://luffyao.github.io/2019/12/profiling-c-with-perf-in-the-linux-env/</link>
+      <pubDate>Sun, 01 Dec 2019 20:32:51 +0800</pubDate>
+      
+      <guid>https://luffyao.github.io/2019/12/profiling-c-with-perf-in-the-linux-env/</guid>
+      <description>前言 该篇主要是记录如何使用 Linux 自带的 Pref 工具看 C++程序的性能问题。该篇只是简单的记录如何收集性能数据，具体分析这里不做描述。 安装 perf sudo apt-get install linux-tools-common sudo apt-get</description>
+    </item>
+    
+  </channel>
+</rss>
